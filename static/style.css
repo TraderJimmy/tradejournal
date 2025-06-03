@@ -1,0 +1,78 @@
+body {
+    font-family: sans-serif;
+    background-color: #111;
+    color: #eee;
+}
+
+h1 {
+    margin-bottom: 2rem;
+}
+
+form {
+    margin-bottom: 2rem;
+}
+
+.trade {
+    background: #1c1c1c;
+    padding: 1rem;
+    margin-bottom: 2rem;
+    border-radius: 8px;
+}
+
+.trade img {
+    width: 49%;
+    max-height: 400px;
+    object-fit: contain;
+    border-radius: 6px;
+}
+
+.tag-badge {
+    display: inline-block;
+    background-color: #333;
+    color: #ddd;
+    padding: 4px 8px;
+    border-radius: 12px;
+    font-size: 0.9em;
+    margin-right: 5px;
+    margin-top: 5px;
+}
+
+.tag-badge {
+    display: inline-flex;
+    align-items: center;
+    background-color: #2d3748; /* mörkgrå */
+    color: white;
+    border-radius: 9999px;
+    padding: 4px 10px;
+    font-size: 0.9rem;
+    margin: 4px 4px 0 0;
+}
+
+.tag-badge form {
+    display: inline;
+    margin-left: 8px;
+}
+
+.tag-remove-btn {
+    background: none;
+    border: none;
+    color: #e53e3e; /* röd */
+    cursor: pointer;
+    font-weight: bold;
+    margin-left: 4px;
+    padding: 0;
+    font-size: 0.95rem;
+}
+
+.tag-remove-btn:hover {
+    color: #f56565;
+}
+
+#modalContent {
+    min-height: 700px; /* Justera vid behov */
+    transition: height 0.3s ease;
+  }
+
+html {
+    scroll-behavior: smooth;
+  }

@@ -1,0 +1,272 @@
+<!-- MODAL -->
+    <div id="tradeModal" class="fixed inset-0 bg-black bg-opacity-60 flex justify-center items-center z-50 hidden">
+        <div class="bg-gray-800 p-6 rounded-lg w-full max-w-2xl relative" id="modalContent">
+            <button id="closeModalBtn" class="absolute top-2 right-2 text-white text-2xl hover:text-red-400">×</button>
+            <h2 class="text-2xl font-bold mb-4">➕ Lägg till ny trade</h2>
+
+            <!-- TABS -->
+            <div class="mb-4 border-b border-gray-600 flex space-x-4">
+                <button class="tab-button py-2 px-4 text-sm font-medium text-white border-b-2 border-transparent hover:border-green-500" data-tab="tab1">📝 Regular Data</button>
+                <button class="tab-button py-2 px-4 text-sm font-medium text-white border-b-2 border-transparent hover:border-green-500" data-tab="tab2">🏷️ Taggar</button>
+                <button class="tab-button py-2 px-4 text-sm font-medium text-white border-b-2 border-transparent hover:border-green-500" data-tab="tab3">📎 Bilder</button>
+            </div>
+
+            <form id="tradeForm" method="post" enctype="multipart/form-data" class="space-y-4">
+                <!-- TAB 1: Regular Data -->
+                <input type="hidden" name="trade_id" value="">
+                <div id="tab1" class="tab-content">
+                    <div>
+                        <label class="block font-semibold mb-1">Datum:</label>
+                        <input type="date" name="datum" required class="w-full p-2 rounded bg-gray-700 text-white border border-gray-600">
+                    </div>
+
+                    <div class="flex gap-4 mb-4">
+                      <!-- Instrument -->
+                      <div class="w-1/2">
+                        <label for="instrument" class="block font-semibold mb-1">Instrument:</label>
+                        <select id="instrument" name="instrument" class="w-full p-2 bg-gray-700 border border-gray-600 rounded">
+                          <option value="">-- Välj instrument --</option>
+                          <option value="de40">DE40</option>
+                          <option value="sp500">S&P 500</option>
+                        </select>
+                      </div>
+
+                      <!-- Direktion -->
+                      <div class="w-1/2">
+                        <label class="block font-semibold mb-1">Direktion:</label>
+                        <div class="flex gap-4 items-center">
+                          <label class="inline-flex items-center">
+                            <input type="radio" name="direction" value="long" class="form-radio text-green-500">
+                            <span class="ml-2">Long</span>
+                          </label>
+                          <label class="inline-flex items-center">
+                            <input type="radio" name="direction" value="short" class="form-radio text-red-500">
+                            <span class="ml-2">Short</span>
+                          </label>
+                        </div>
+                      </div>
+                    </div>
+
+
+                    <!-- SETUP Dropdown -->
+                    <div>
+                        <label class="block font-semibold mb-1">Setup:</label>
+                        <select name="setup" id="setupSelect" class="w-full p-2 rounded bg-gray-700 text-white border border-gray-600">
+                            <option value="">-- Välj Setup --</option>
+                            <option value="reversal">Reversal ÅT</option>
+                            <option value="continuation">Continuation ÅT</option>
+                        </select>
+                    </div>
+
+                    
+                    <div class="flex flex-col md:flex-row gap-4 mb-4">
+                      <!-- Reversal-regler dropdown -->
+                      <div class="relative w-full md:w-1/2">
+                        <label class="block font-semibold mb-1">📋 Reversal-regler</label>
+                        <button type="button" id="reversalRulesBtn" class="w-full text-left px-4 py-2 bg-gray-700 text-white rounded border border-gray-600">
+                          Välj regler för Reversal
+                        </button>
+                        <div id="reversalRulesDropdown" class="absolute z-50 mt-1 w-full bg-gray-800 border border-gray-600 rounded shadow-lg hidden max-h-60 overflow-y-auto p-2 space-y-1">
+                          <label class="block"><input type="checkbox" name="reversal_rules" value="Tidigare zon tas ut"> Tidigare zon tas ut</label>
+                          <label class="block"><input type="checkbox" name="reversal_rules" value="Stark avsats"> Stark avsats</label>
+                          <label class="block"><input type="checkbox" name="reversal_rules" value="BAS - IBI/PBI"> BAS - IBI/PBI</label>
+                          <label class="block"><input type="checkbox" name="reversal_rules" value="Ej återtest från PBI"> Ej återtest från PBI</label>
+                        </div>
+                      </div>
+
+                      <!-- Continuation-regler dropdown -->
+                      <div class="relative w-full md:w-1/2">
+                        <label class="block font-semibold mb-1">📋 Continuation-regler</label>
+                        <button type="button" id="continuationRulesBtn" class="w-full text-left px-4 py-2 bg-gray-700 text-white rounded border border-gray-600">
+                          Välj regler för Continuation
+                        </button>
+                        <div id="continuationRulesDropdown" class="absolute z-50 mt-1 w-full bg-gray-800 border border-gray-600 rounded shadow-lg hidden max-h-60 overflow-y-auto p-2 space-y-1">
+                          <label class="block"><input type="checkbox" name="continuation_rules" value="Köpare/Säljare kommer in och tappar"> Köpare/Säljare kommer in och tappar</label>
+                          <label class="block"><input type="checkbox" name="continuation_rules" value="Ny topp/botten"> Ny topp/botten</label>
+                          <label class="block"><input type="checkbox" name="continuation_rules" value="Stark avsats"> Stark avsats</label>
+                          <label class="block"><input type="checkbox" name="continuation_rules" value="BAS - PBI"> BAS - PBI</label>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div class="flex gap-4 mb-4">
+                      <!-- Outcome -->
+                      <div class="w-1/2">
+                        <label class="block font-semibold mb-1">Outcome:</label>
+                        <div class="flex gap-4 items-center">
+                          <label class="inline-flex items-center">
+                            <input type="radio" name="outcome" value="tp" class="form-radio text-green-500">
+                            <span class="ml-2">TP</span>
+                          </label>
+                          <label class="inline-flex items-center">
+                            <input type="radio" name="outcome" value="sl" class="form-radio text-red-500">
+                            <span class="ml-2">SL</span>
+                          </label>
+                          <label class="inline-flex items-center">
+                            <input type="radio" name="outcome" value="none" class="form-radio text-gray-400">
+                            <span class="ml-2">None</span>
+                          </label>
+                        </div>
+                      </div>
+
+                      <!-- RR Logisk -->
+                      <div class="w-1/2">
+                        <label class="block font-semibold mb-1">🎯 RR Logisk (teknisk exit)</label>
+                        <input type="number" step="0.1" name="rr_logisk" placeholder="t.ex. 2.5 eller -1"
+                               class="w-full p-2 rounded bg-gray-700 text-white border border-gray-600">
+                      </div>
+
+                      <!-- RR Max -->
+                      <div class="w-1/2">
+                        <label class="block font-semibold mb-1">📏 RR Max (fast exit-nivå)</label>
+                        <input type="number" step="0.1" name="rr_max" placeholder="t.ex. 3 eller -1"
+                               class="w-full p-2 rounded bg-gray-700 text-white border border-gray-600">
+                      </div>
+
+
+                    </div>
+
+
+
+                    <div>
+                        <label class="block font-semibold mb-1">Kommentarer:</label>
+                        <textarea name="kommentar" rows="3" class="w-full p-2 rounded bg-gray-700 text-white border border-gray-600"></textarea>
+                    </div>
+                </div>
+
+                <!-- TAB 2: Taggar -->
+                <div id="tab2" class="tab-content hidden">
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+                  
+                  <!-- Entry logik -->
+                  <div>
+                    <label class="block font-semibold mb-1">Entry logik:</label>
+                    <div class="relative">
+                      <button type="button" id="entryLogicBtn" class="w-full p-2 bg-gray-700 border border-gray-600 rounded text-left">
+                        Välj alternativ
+                      </button>
+                      <div id="entryLogicDropdown" class="absolute z-10 mt-1 w-full bg-gray-800 border border-gray-600 rounded shadow hidden">
+                        <label class="flex items-center p-2 hover:bg-gray-700">
+                          <input type="checkbox" name="entry_logic" value="ÅT Säljare tappar" class="mr-2">
+                          ÅT Säljare tappar
+                        </label>
+                        <label class="flex items-center p-2 hover:bg-gray-700">
+                          <input type="checkbox" name="entry_logic" value="ÅT Köpare tappar" class="mr-2">
+                          ÅT Köpare tappar
+                        </label>
+                      </div>
+                    </div>
+                  </div>
+
+                  <!-- Exit logik -->
+                  <div>
+                    <label class="block font-semibold mb-1">Exit logik:</label>
+                    <div class="relative">
+                      <button type="button" id="exitLogicBtn" class="w-full p-2 bg-gray-700 border border-gray-600 rounded text-left">
+                        Välj alternativ
+                      </button>
+                      <div id="exitLogicDropdown" class="absolute z-10 mt-1 w-full bg-gray-800 border border-gray-600 rounded shadow hidden">
+                        <label class="flex items-center p-2 hover:bg-gray-700">
+                          <input type="checkbox" name="exit_logic" value="Innan ny topp/botten" class="mr-2">
+                          Innan ny topp/botten
+                        </label>
+                        <label class="flex items-center p-2 hover:bg-gray-700">
+                          <input type="checkbox" name="exit_logic" value="Efter ny topp/botten" class="mr-2">
+                          Efter ny topp/botten
+                        </label>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                    
+
+                    <!-- PreMarket -->
+                    <div class="mb-4">
+                      <label class="block font-semibold mb-1">PreMarket:</label>
+                      <div class="relative">
+                        <button type="button" id="preMarketBtn" class="w-full p-2 bg-gray-700 border border-gray-600 rounded text-left">
+                          Välj alternativ
+                        </button>
+                        <div id="preMarketDropdown" class="absolute z-10 mt-1 w-full bg-gray-800 border border-gray-600 rounded shadow hidden">
+                          <label class="flex items-center p-2 hover:bg-gray-700">
+                            <input type="checkbox" name="premarket" value="Första OB under PM" class="mr-2">
+                            Första OB under PM
+                          </label>
+                          <label class="flex items-center p-2 hover:bg-gray-700">
+                            <input type="checkbox" name="premarket" value="Första OB under PPM" class="mr-2">
+                            Första OB under PPM
+                          </label>
+                          <label class="flex items-center p-2 hover:bg-gray-700">
+                            <input type="checkbox" name="premarket" value="Kontroll under PM" class="mr-2">
+                            Kontroll under PM
+                          </label>
+                        </div>
+                      </div>
+                    </div>
+
+                    <!-- Obalansen -->
+                    <div class="mb-4">
+                      <label class="block font-semibold mb-1">Obalansen:</label>
+                      <div class="relative">
+                        <button type="button" id="obalansBtn" class="w-full p-2 bg-gray-700 border border-gray-600 rounded text-left">
+                          Välj alternativ
+                        </button>
+                        <div id="obalansDropdown" class="absolute z-10 mt-1 w-full bg-gray-800 border border-gray-600 rounded shadow hidden">
+                          <label class="flex items-center p-2 hover:bg-gray-700">
+                            <input type="checkbox" name="obalans" value="Traden är tagen på 2:a OB" class="mr-2">
+                            Traden är tagen på 2:a OB
+                          </label>
+                          <label class="flex items-center p-2 hover:bg-gray-700">
+                            <input type="checkbox" name="obalans" value="Traden är tagen på 1:a OB" class="mr-2">
+                            Traden är tagen på 1:a OB
+                          </label>
+                        </div>
+                      </div>
+                    </div>
+
+                    <!-- Återtesten -->
+                    <div class="mb-4">
+                      <label class="block font-semibold mb-1">Återtesten:</label>
+                      <div class="relative">
+                        <button type="button" id="återtestenBtn" class="w-full p-2 bg-gray-700 border border-gray-600 rounded text-left">
+                          Välj alternativ
+                        </button>
+                        <div id="återtestenDropdown" class="absolute z-10 mt-1 w-full bg-gray-800 border border-gray-600 rounded shadow hidden">
+                          <label class="flex items-center p-2 hover:bg-gray-700">
+                            <input type="checkbox" name="återtesten" value="Hämtar likviditet i min zon" class="mr-2">
+                            Hämtar likviditet i min zon
+                          </label>
+                          <label class="flex items-center p-2 hover:bg-gray-700">
+                            <input type="checkbox" name="återtesten" value="Miss första ÅT, sen ny topp/botten" class="mr-2">
+                            Miss första ÅT, sen ny topp/botten
+                          </label>
+                          <label class="flex items-center p-2 hover:bg-gray-700">
+                            <input type="checkbox" name="återtesten" value="Miss första ÅT, sen ingen ny topp/botten" class="mr-2">
+                            Miss första ÅT, sen ingen ny topp/botten
+                          </label>
+                        </div>
+                      </div>
+                    </div>
+
+
+                </div>
+
+                <!-- TAB 3: Bilder -->
+                <div id="tab3" class="tab-content hidden">
+                    <div>
+                        <label class="block font-semibold mb-1">Bild 1:</label>
+                        <input type="file" name="bild1" accept="image/*" class="text-white">
+                    </div>
+                    <div>
+                        <label class="block font-semibold mb-1">Bild 2:</label>
+                        <input type="file" name="bild2" accept="image/*" class="text-white">
+                    </div>
+                </div>
+
+                <div class="flex justify-end pt-4">
+                    <button type="submit" class="px-4 py-2 bg-green-600 hover:bg-green-700 rounded">📤 Ladda upp trade</button>
+                </div>
+            </form>
+        </div>
+    </div>

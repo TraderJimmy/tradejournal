@@ -1,0 +1,171 @@
+{% extends "base.html" %}
+
+{% block content %}
+<main class="max-w-6xl mx-auto p-6">
+  <h1 class="text-2xl font-bold text-white mb-6">📊 Statistik</h1>
+
+  
+
+  <!-- Statistik-kort -->
+  <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6 text-white">
+    <div class="bg-gray-800 rounded p-4 shadow">
+      <p class="text-sm text-gray-400">Total Trades</p>
+      <p class="text-2xl font-bold">{{ total_trades }}</p>
+    </div>
+    <div class="bg-gray-800 rounded p-4 shadow">
+      <p class="text-sm text-gray-400">Total RR</p>
+      <p class="text-2xl font-bold">{{ total_rr_logisk }}</p>
+    </div>
+    <div class="bg-gray-800 rounded p-4 shadow">
+      <p class="text-sm text-gray-400">Avg RR / Trade</p>
+      <p class="text-2xl font-bold">{{ avg_rr_logisk }}</p>
+    </div>
+    <div class="bg-gray-800 rounded p-4 shadow">
+      <p class="text-sm text-gray-400">Trades in Profit (TP)</p>
+      <p class="text-2xl font-bold">{{ wins_logisk }}</p>
+    </div>
+    <div class="bg-gray-800 rounded p-4 shadow">
+      <p class="text-sm text-gray-400">Trades in Loss (SL)</p>
+      <p class="text-2xl font-bold">{{ losses_logisk }}</p>
+    </div>
+    <div class="bg-gray-800 rounded p-4 shadow">
+      <p class="text-sm text-gray-400">Winrate</p>
+      <p class="text-2xl font-bold">{{ winrate }}%</p>
+    </div>
+    <div class="bg-gray-800 rounded p-4 shadow">
+      <p class="text-sm text-gray-400">Longs Won</p>
+      <p class="text-2xl font-bold">{{ longs_won }}</p>
+    </div>
+    <div class="bg-gray-800 rounded p-4 shadow">
+      <p class="text-sm text-gray-400">Shorts Won</p>
+      <p class="text-2xl font-bold">{{ shorts_won }}</p>
+    </div>
+    <div class="bg-gray-800 rounded p-4 shadow">
+      <p class="text-sm text-gray-400">Max Wins in a Row</p>
+      <p class="text-2xl font-bold">{{ max_wins_row }}</p>
+    </div>
+    <div class="bg-gray-800 rounded p-4 shadow">
+      <p class="text-sm text-gray-400">Max Losses in a Row</p>
+      <p class="text-2xl font-bold">{{ max_losses_row }}</p>
+    </div>
+  </div>
+  <!-- Jämförelse: Logisk Exit vs Fast Exit -->
+  <h2 class="text-xl font-semibold text-white mt-10 mb-4">🔍 Jämförelse: Logisk Exit vs Fast Exit</h2>
+
+  <div class="overflow-x-auto">
+    <table class="min-w-full bg-gray-800 rounded text-white text-sm">
+      <thead>
+        <tr class="bg-gray-700 text-left">
+          <th class="px-4 py-2">Exit Typ</th>
+          <th class="px-4 py-2">Totalt RR</th>
+          <th class="px-4 py-2">Snitt RR</th>
+          <th class="px-4 py-2">TP</th>
+          <th class="px-4 py-2">SL</th>
+          <th class="px-4 py-2">Winrate</th>
+          <th>Trades</th>
+          <th>Longs Won</th>
+          <th>Shorts Won</th>
+          <th>🏆 Max Wins</th>
+          <th>💥 Max Losses</th>
+
+        </tr>
+      </thead>
+      <tbody>
+        <tr class="border-t border-gray-600">
+          <td class="px-4 py-2">🎯 Logisk Exit</td>
+          <td class="px-4 py-2">{{ total_rr_logisk }}</td>
+          <td class="px-4 py-2">{{ avg_rr_logisk }}</td>
+          <td class="px-4 py-2">{{ wins_logisk }}</td>
+          <td class="px-4 py-2">{{ losses_logisk }}</td>
+          <td class="px-4 py-2">{{ winrate_logisk }}%</td>
+          <td>{{ total_trades_logisk }}</td>
+          <td>{{ longs_won_logisk }}</td>
+          <td>{{ shorts_won_logisk }}</td>
+          <td>{{ max_wins_row_logisk }}</td>
+          <td>{{ max_losses_row_logisk }}</td>
+
+        </tr>
+        <tr class="border-t border-gray-600">
+          <td class="px-4 py-2">📏 Fast Exit</td>
+          <td class="px-4 py-2">{{ total_rr_max }}</td>
+          <td class="px-4 py-2">{{ avg_rr_max }}</td>
+          <td class="px-4 py-2">{{ wins_max }}</td>
+          <td class="px-4 py-2">{{ losses_max }}</td>
+          <td class="px-4 py-2">{{ winrate_max }}%</td>
+          <td>{{ total_trades_max }}</td>
+          <td>{{ longs_won_max }}</td>
+          <td>{{ shorts_won_max }}</td>
+          <td>{{ max_wins_row_max }}</td>
+          <td>{{ max_losses_row_max }}</td>
+
+        </tr>
+      </tbody>
+    </table>
+
+    <h2 class="text-xl font-semibold text-white mt-12 mb-4">📅 Månad för månad (Logisk vs Fast Exit)</h2>
+
+    <div class="overflow-x-auto">
+      <table class="min-w-full bg-gray-800 text-white text-sm rounded shadow">
+        <thead class="bg-gray-700 text-gray-300">
+          <tr>
+            <th class="px-4 py-2 text-left">📆 Månad</th>
+            <th class="px-4 py-2 text-left">Exit Typ</th>
+            <th class="px-4 py-2 text-right">Totalt RR</th>
+            <th class="px-4 py-2 text-right">Snitt RR</th>
+            <th class="px-4 py-2 text-right">TP</th>
+            <th class="px-4 py-2 text-right">SL</th>
+            <th class="px-4 py-2 text-right">Winrate</th>
+            <th class="px-4 py-2 text-right">Trades</th>
+            <th class="px-4 py-2 text-right">Longs Won</th>
+            <th class="px-4 py-2 text-right">Shorts Won</th>
+            <th class="px-4 py-2 text-right">🏆 Max Wins</th>
+            <th class="px-4 py-2 text-right">💥 Max Losses</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for month, data in monthly_stats.items() %}
+            <!-- Logisk Exit -->
+            <tr class="bg-gray-900 border-t border-gray-700">
+              <td class="px-4 py-2 font-semibold" rowspan="2">{{ month }}</td>
+              <td class="px-4 py-2">🎯 Logisk</td>
+              <td class="px-4 py-2 text-right">{{ data.logisk.total }}</td>
+              <td class="px-4 py-2 text-right">{{ data.logisk.avg }}</td>
+              <td class="px-4 py-2 text-right">{{ data.logisk.wins }}</td>
+              <td class="px-4 py-2 text-right">{{ data.logisk.losses }}</td>
+              <td class="px-4 py-2 text-right">{{ data.logisk.winrate }}%</td>
+              <td class="px-4 py-2 text-right">{{ data.extra.total_trades }}</td>
+              <td class="px-4 py-2 text-right">{{ data.logisk.longs_won }}</td>
+              <td class="px-4 py-2 text-right">{{ data.logisk.shorts_won }}</td>
+              <td class="px-4 py-2 text-right">{{ data.logisk.max_wins_row }}</td>
+              <td class="px-4 py-2 text-right">{{ data.logisk.max_losses_row }}</td>
+            </tr>
+
+            <!-- Fast Exit -->
+            <tr class="bg-gray-800 border-b border-gray-600">
+              <td class="px-4 py-2">📏 Fast Exit</td>
+              <td class="px-4 py-2 text-right">{{ data.max.total }}</td>
+              <td class="px-4 py-2 text-right">{{ data.max.avg }}</td>
+              <td class="px-4 py-2 text-right">{{ data.max.wins }}</td>
+              <td class="px-4 py-2 text-right">{{ data.max.losses }}</td>
+              <td class="px-4 py-2 text-right">{{ data.max.winrate }}%</td>
+              <td class="px-4 py-2 text-right">{{ data.extra.total_trades }}</td>
+              <td class="px-4 py-2 text-right">{{ data.max.longs_won }}</td>
+              <td class="px-4 py-2 text-right">{{ data.max.shorts_won }}</td>
+              <td class="px-4 py-2 text-right">{{ data.max.max_wins_row }}</td>
+              <td class="px-4 py-2 text-right">{{ data.max.max_losses_row }}</td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+
+
+
+  </div>
+
+</main>
+{% endblock %}
+
+{% block scripts %}
+  <script src="{{ url_for('static', filename='scripts.js') }}"></script>
+{% endblock %}

@@ -1,0 +1,77 @@
+{% for trade in trades %}
+<div id="trade-{{ trade['id'] }}" class="bg-gray-800 p-4 rounded mb-6 max-w-4xl mx-auto">
+  <!-- Datum -->
+  {% if trade['datum'] %}
+  <p class="text-sm text-gray-400 mb-2">📅 {{ trade['datum'] }}</p>
+  {% endif %}
+
+  <!-- Bilder -->
+  <div class="flex flex-col md:flex-row gap-4 mb-4">
+    <img src="{{ trade['image1'] }}" alt="Bild 1" class="w-full md:w-1/2 max-w-md mx-auto rounded">
+    <img src="{{ trade['image2'] }}" alt="Bild 2" class="w-full md:w-1/2 max-w-md mx-auto rounded">
+  </div>
+
+  <!-- Trade-data i två kolumner -->
+  <div class="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm text-gray-300">
+    <div>
+      {% if trade['instrument'] %}<p><strong>📊 Instrument:</strong> {{ trade['instrument'] }}</p>{% endif %}
+      {% if trade['setup'] %}<p><strong>⚙️ Setup:</strong> {{ trade['setup'] }}</p>{% endif %}
+      {% if trade['reversal_rules'] %}<p><strong>🔄 Reversal-regler:</strong> {{ trade['reversal_rules'] }}</p>{% endif %}
+      {% if trade['continuation_rules'] %}<p><strong>⏩ Continuation-regler:</strong> {{ trade['continuation_rules'] }}</p>{% endif %}
+      {% if trade['direction'] %}<p><strong>📐 Direction:</strong> {{ trade['direction'] }}</p>{% endif %}
+    </div>
+    <div>
+      {% if trade['regler'] %}<p><strong>📋 Regler:</strong> {{ trade['regler'] }}</p>{% endif %}
+      {% if trade['entry_logic'] %}<p><strong>➡️ Entry logik:</strong> {{ trade['entry_logic'] }}</p>{% endif %}
+      {% if trade['exit_logic'] %}<p><strong>⬅️ Exit logik:</strong> {{ trade['exit_logic'] }}</p>{% endif %}
+      {% if trade['premarket'] %}<p><strong>⏱️ PreMarket:</strong> {{ trade['premarket'] }}</p>{% endif %}
+      {% if trade['obalans'] %}<p><strong>📦 Obalans:</strong> {{ trade['obalans'] }}</p>{% endif %}
+      {% if trade['återtesten'] %}<p><strong>🔁 Återtesten:</strong> {{ trade['återtesten'] }}</p>{% endif %}
+      {% if trade['outcome'] %}<p><strong>🎯 Outcome:</strong> {{ trade['outcome'] }}</p>{% endif %}
+      {% if trade['rr_logisk'] is not none %}<p><strong>🎯 RR Logisk:</strong> {{ trade['rr_logisk'] }}</p>{% endif %}
+      {% if trade['rr_max'] is not none %}<p><strong>📏 RR Max:</strong> {{ trade['rr_max'] }}</p>{% endif %}
+    </div>
+  </div>
+
+  <!-- Taggar -->
+  {% if trade.tags_by_category %}
+  <div class="mt-4 flex flex-wrap gap-2">
+    {% for category, tags in trade.tags_by_category.items() %}
+      {% for tag in tags %}
+        <span class="bg-green-700 text-white px-2 py-1 rounded text-sm flex items-center">
+          {{ category }}: {{ tag }}
+          <form method="POST" action="/remove_tag" class="ml-2">
+            <input type="hidden" name="trade_id" value="{{ trade['id'] }}">
+            <input type="hidden" name="tag_name" value="{{ tag }}">
+            <button type="submit" class="ml-1 text-white hover:text-red-300" title="Ta bort tagg">×</button>
+          </form>
+        </span>
+      {% endfor %}
+    {% endfor %}
+  </div>
+  {% endif %}
+
+  <!-- Kommentar -->
+  {% if trade['kommentar'] %}
+  <p class="mt-4 text-gray-300 text-sm italic">💬 {{ trade['kommentar'] }}</p>
+  {% endif %}
+
+  <!-- Redigera + Ta bort -->
+  <div class="mt-4 flex justify-between">
+    <button
+      type="button"
+      class="px-3 py-1 bg-yellow-600 hover:bg-yellow-700 text-white rounded text-sm"
+      data-edit-id="{{ trade['id'] }}"
+    >
+      ✏️ Redigera trade
+    </button>
+    <form method="POST" action="/delete_trade/{{ trade['id'] }}" onsubmit="return confirm('Vill du verkligen ta bort traden?')">
+      <button type="submit" class="px-3 py-1 bg-red-600 hover:bg-red-700 text-white rounded text-sm">
+        🗑️ Ta bort
+      </button>
+    </form>
+  </div>
+</div>
+{% else %}
+<p class="text-gray-400">Inga trades matchar dina filter.</p>
+{% endfor %}

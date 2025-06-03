@@ -1,0 +1,807 @@
+from flask import Flask, render_template, request, redirect, url_for, jsonify
+from collections import defaultdict
+from urllib.parse import urlencode
+from itertools import groupby
+from datetime import datetime
+import sqlite3
+import os
+import uuid
+
+
+
+app = Flask(__name__)
+
+DB_PATH = "tradejournal.db"
+
+def get_db_connection():
+    conn = sqlite3.connect(DB_PATH)
+    conn.row_factory = sqlite3.Row
+    return conn
+
+
+def get_all_trades(filters=None):
+    from collections import defaultdict
+    conn = get_db_connection()
+    cursor = conn.cursor()
+
+    query = "SELECT * FROM trades"
+    conditions = []
+    params = []
+
+    if filters:
+        # Exakta matchningar (dropdowns, radioknappar, datum)
+        exact_fields = ["instrument", "setup", "direction", "datum", "outcome", "rr"]
+        for field in exact_fields:
+            values = filters.get(field, [])
+            if not isinstance(values, list):
+                values = [values]
+            for val in values:
+                if val:
+                    conditions.append(f"{field} = ?")
+                    params.append(val)
+
+        # 📅 Datumintervall
+        start_date = filters.get("start_date", [None])[0]
+        end_date = filters.get("end_date", [None])[0]
+
+        if start_date:
+            conditions.append("datum >= ?")
+            params.append(start_date)
+
+        if end_date:
+            conditions.append("datum <= ?")
+            params.append(end_date)
+
+
+        # Fält som tillåter flera värden (checkboxar)
+        checkbox_fields = ["regler", "entry_logic", "exit_logic", "premarket", "obalans", "återtesten", "reversal_rules", "continuation_rules"]
+        for field in checkbox_fields:
+            values = filters.get(field, [])
+            if not isinstance(values, list):
+                values = [values]
+            for val in values:
+                if val:
+                    conditions.append(f"{field} LIKE ?")
+                    params.append(f"%{val}%")
+
+    if conditions:
+        query += " WHERE " + " AND ".join(conditions)
+
+    query += " ORDER BY datum DESC"
+
+    cursor.execute(query, params)
+    trades = cursor.fetchall()
+
+    # Packa upp tags per trade
+    trade_data = []
+    for trade in trades:
+        cursor.execute("""
+            SELECT tags.name AS tag_name, categories.name AS category_name, tags.id AS tag_id
+            FROM trade_tags
+            JOIN tags ON trade_tags.tag_id = tags.id
+            JOIN categories ON tags.category_id = categories.id
+            WHERE trade_tags.trade_id = ?
+        """, (trade["id"],))
+        tag_rows = cursor.fetchall()
+
+        tags_by_category = defaultdict(list)
+        tag_id_list = []
+
+        for row in tag_rows:
+            tags_by_category[row['category_name']].append(row['tag_name'])
+            tag_id_list.append(row['tag_id'])
+
+        trade_data.append({
+            'id': trade['id'],
+            'datum': trade['datum'],
+            'instrument': trade['instrument'],
+            'setup': trade['setup'],
+            'regler': trade['regler'],
+            'direction': trade['direction'],
+            'outcome': trade['outcome'],
+            'rr_logisk': trade['rr_logisk'],
+            'rr_max': trade['rr_max'],
+            'entry_logic': trade['entry_logic'],
+            'exit_logic': trade['exit_logic'],
+            'premarket': trade['premarket'],
+            'obalans': trade['obalans'],
+            'återtesten': trade['återtesten'],
+            'kommentar': trade['kommentar'],
+            'image1': trade['image1'],
+            'image2': trade['image2'],
+            'tags_by_category': tags_by_category,
+            'tag_ids': tag_id_list,
+            'reversal_rules': trade['reversal_rules'],
+            'continuation_rules': trade['continuation_rules']
+        })
+
+    # Alla tillgängliga taggar
+    cursor.execute("""
+        SELECT tags.id AS tag_id, tags.name AS tag_name, categories.name AS category_name
+        FROM tags
+        JOIN categories ON tags.category_id = categories.id
+        ORDER BY categories.name, tags.name
+    """)
+    all_tags = cursor.fetchall()
+
+    conn.close()
+    return trade_data, all_tags
+
+
+
+@app.route('/')
+def index():
+    filters = request.args.to_dict(flat=False)  # Viktigt: flat=False för att stödja checkboxar
+
+    # Hämta filtrerade trades
+    trades, all_tags = get_all_trades(filters)
+
+    # För badges och clear-länkar
+    active_filters = {}
+    clear_links = {}
+
+    for key, values in filters.items():
+        non_empty = [v for v in values if v]  # hoppa över tomma värden
+        if non_empty:
+            active_filters[key] = non_empty
+            for v in non_empty:
+                updated_args = filters.copy()
+                updated_args[key] = [val for val in non_empty if val != v]
+                clear_links[f"{key}:{v}"] = url_for("index") + "?" + urlencode(updated_args, doseq=True)
+
+    return render_template(
+        "index.html",
+        trades=trades,
+        all_tags=all_tags,
+        active_filters=active_filters,
+        clear_links=clear_links
+    )
+
+
+
+@app.route("/upload", methods=["POST"])
+def upload():
+    import uuid
+    kommentar = request.form.get("kommentar")
+    datum = request.form.get("datum")
+    instrument = request.form.get("instrument")
+    setup = request.form.get("setup")
+    direction = request.form.get("direction")
+    outcome = request.form.get("outcome")
+    rr_logisk = request.form.get("rr_logisk")
+    rr_max = request.form.get("rr_max")
+
+    regler = ", ".join(request.form.getlist("regler[]"))
+    entry_logic = ", ".join(request.form.getlist("entry_logic"))
+    exit_logic = ", ".join(request.form.getlist("exit_logic"))
+    premarket = ", ".join(request.form.getlist("premarket"))
+    obalans = ", ".join(request.form.getlist("obalans"))
+    återtesten = ", ".join(request.form.getlist("återtesten"))
+    reversal_rules = ", ".join(request.form.getlist("reversal_rules"))
+    continuation_rules = ", ".join(request.form.getlist("continuation_rules"))
+
+    image1 = request.files.get("bild1")
+    image2 = request.files.get("bild2")
+    image1_web_path, image2_web_path = None, None
+
+    if image1 and image2:
+        os.makedirs("static/images", exist_ok=True)
+        filename1 = str(uuid.uuid4()) + "_" + image1.filename
+        filename2 = str(uuid.uuid4()) + "_" + image2.filename
+        image1_path = os.path.join("static", "images", filename1)
+        image2_path = os.path.join("static", "images", filename2)
+        image1.save(image1_path)
+        image2.save(image2_path)
+        image1_web_path = f"/static/images/{filename1}"
+        image2_web_path = f"/static/images/{filename2}"
+
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute("""
+        INSERT INTO trades 
+        (kommentar, datum, instrument, setup, regler, direction, outcome, rr_logisk, rr_max,
+         entry_logic, exit_logic, premarket, obalans, återtesten, image1, image2,
+         reversal_rules, continuation_rules)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    """, (
+        kommentar, datum, instrument, setup, regler, direction, outcome, rr_logisk, rr_max,
+        entry_logic, exit_logic, premarket, obalans, återtesten,
+        image1_web_path, image2_web_path, reversal_rules, continuation_rules
+    ))
+    conn.commit()
+    conn.close()
+    return redirect(url_for("index"))
+
+
+@app.route("/update", methods=["POST"])
+def update():
+    import uuid
+    trade_id = request.form.get("trade_id")
+    kommentar = request.form.get("kommentar")
+    datum = request.form.get("datum")
+    instrument = request.form.get("instrument")
+    setup = request.form.get("setup")
+    direction = request.form.get("direction")
+    outcome = request.form.get("outcome")
+    rr_logisk = request.form.get("rr_logisk")
+    rr_max = request.form.get("rr_max")
+
+    regler = ", ".join(request.form.getlist("regler[]"))
+    entry_logic = ", ".join(request.form.getlist("entry_logic"))
+    exit_logic = ", ".join(request.form.getlist("exit_logic"))
+    premarket = ", ".join(request.form.getlist("premarket"))
+    obalans = ", ".join(request.form.getlist("obalans"))
+    återtesten = ", ".join(request.form.getlist("återtesten"))
+    reversal_rules = ", ".join(request.form.getlist("reversal_rules"))
+    continuation_rules = ", ".join(request.form.getlist("continuation_rules"))
+
+    image1 = request.files.get("bild1")
+    image2 = request.files.get("bild2")
+
+    update_fields = [
+        "kommentar = ?", "datum = ?", "instrument = ?", "setup = ?", "regler = ?",
+        "direction = ?", "outcome = ?", "rr_logisk = ?", "rr_max = ?", "entry_logic = ?", "exit_logic = ?",
+        "premarket = ?", "obalans = ?", "återtesten = ?", "reversal_rules = ?", "continuation_rules = ?"
+    ]
+
+    values = [
+        kommentar, datum, instrument, setup, regler,
+        direction, outcome, rr_logisk, rr_max, entry_logic, exit_logic,
+        premarket, obalans, återtesten, reversal_rules, continuation_rules
+    ]
+
+    if image1:
+        filename1 = str(uuid.uuid4()) + "_" + image1.filename
+        image1_path = os.path.join("static", "images", filename1)
+        image1.save(image1_path)
+        update_fields.append("image1 = ?")
+        values.append(f"/static/images/{filename1}")
+
+    if image2:
+        filename2 = str(uuid.uuid4()) + "_" + image2.filename
+        image2_path = os.path.join("static", "images", filename2)
+        image2.save(image2_path)
+        update_fields.append("image2 = ?")
+        values.append(f"/static/images/{filename2}")
+
+    values.append(trade_id)
+    sql = f"UPDATE trades SET {', '.join(update_fields)} WHERE id = ?"
+
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute(sql, values)
+    conn.commit()
+    conn.close()
+
+    return redirect(url_for("index") + f"#trade-{trade_id}")
+
+
+
+
+@app.route('/add_tag', methods=['POST'])
+def add_tag():
+    trade_id = request.form['trade_id']
+    tag_id = request.form['tag_id']
+    if not tag_id:
+        flash("Ingen tagg vald", "error")
+        return redirect('/')
+
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute("INSERT INTO trade_tags (trade_id, tag_id) VALUES (?, ?)", (trade_id, tag_id))
+    conn.commit()
+    conn.close()
+    return redirect('/')
+
+@app.route('/remove_tag', methods=['POST'])
+def remove_tag():
+    trade_id = request.form['trade_id']
+    tag_name = request.form['tag_name']
+
+    conn = get_db_connection()
+    cursor = conn.cursor()
+
+    # Slå upp tag_id via tag_name
+    cursor.execute("SELECT id FROM tags WHERE name = ?", (tag_name,))
+    tag = cursor.fetchone()
+    if tag:
+        tag_id = tag['id']
+        cursor.execute("DELETE FROM trade_tags WHERE trade_id = ? AND tag_id = ?", (trade_id, tag_id))
+        conn.commit()
+
+    conn.close()
+    return redirect('/')
+
+@app.route("/get_trade/<int:trade_id>")
+def get_trade(trade_id):
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute("SELECT * FROM trades WHERE id = ?", (trade_id,))
+    trade = cursor.fetchone()
+    conn.close()
+
+    if trade:
+        return jsonify({
+            "id": trade["id"],
+            "datum": trade["datum"],
+            "instrument": trade["instrument"],
+            "setup": trade["setup"],
+            "regler": trade["regler"],
+            "direction": trade["direction"],
+            "outcome": trade["outcome"],
+            "rr_logisk": trade["rr_logisk"],
+            "rr_max": trade["rr_max"],  
+            "entry_logic": trade["entry_logic"],
+            "exit_logic": trade["exit_logic"],
+            "premarket": trade["premarket"],
+            "obalans": trade["obalans"],
+            "återtesten": trade["återtesten"],
+            "kommentar": trade["kommentar"],
+            "reversal_rules": trade["reversal_rules"],
+            "continuation_rules": trade["continuation_rules"]
+
+        })
+    return jsonify({}), 404
+
+@app.route("/delete_trade/<int:trade_id>", methods=["POST"])
+def delete_trade(trade_id):
+    conn = get_db_connection()
+    cursor = conn.cursor()
+
+    # Ta även bort tagg-kopplingar först om de finns
+    cursor.execute("DELETE FROM trade_tags WHERE trade_id = ?", (trade_id,))
+    cursor.execute("DELETE FROM trades WHERE id = ?", (trade_id,))
+    
+    conn.commit()
+    conn.close()
+    return redirect(url_for("index"))
+
+
+@app.route("/filtered_trades")
+def filtered_trades():
+    filters = request.args.to_dict(flat=True)
+    trades, all_tags = get_all_trades(filters)
+
+    # Samma badge-logik
+    active_filters = {}
+    clear_links = {}
+
+    for key, val in filters.items():
+        if val:
+            active_filters[key] = val
+            new_args = filters.copy()
+            new_args.pop(key)
+            clear_links[key] = url_for('index') + '?' + urlencode(new_args)
+
+    return render_template(
+        "partials/trade_wrapper.html",
+        trades=trades,
+        all_tags=all_tags,
+        active_filters=active_filters,
+        clear_links=clear_links
+    )
+
+@app.route("/stats")
+def stats():
+
+    # 📥 1. Läs in filter från URL-parametrar
+    filters = request.args.to_dict(flat=False)
+    rr_max_filter = filters.get("rr_max_filter", [None])[0]
+
+    # 🧮 2. Hämta filtrerade trades
+    trades, _ = get_all_trades(filters)
+
+    # 📊 3. Initiera variabler för Total-statistik
+    total_trades = 0
+    rr_list = []             # Ursprungliga rr-fältet
+    rr_logisk_list = []      # För teknisk/logisk exit
+    rr_max_list = []         # För fast exit
+    rr_max_list_total = []
+
+    wins = 0
+    losses = 0
+    wins_logisk = 0
+    losses_logisk = 0
+    wins_max = 0
+    losses_max = 0
+    longs_won = 0
+    shorts_won = 0
+    outcome_sequence = []
+    outcome_seq_logisk = []
+    outcome_seq_max = []
+
+    longs_won_logisk = 0
+    shorts_won_logisk = 0
+    count_logisk_trades = 0
+    count_max_trades = 0
+    longs_won_max = 0
+    shorts_won_max = 0
+
+    wins_max_total = 0
+    losses_max_total = 0
+    longs_won_max_total = 0
+    shorts_won_max_total = 0
+
+
+    rr_logisk_list_total = []
+    wins_logisk_total = 0
+    losses_logisk_total = 0
+    count_logisk_total = 0
+    longs_won_logisk_total = 0
+    shorts_won_logisk_total = 0
+    outcome_seq_logisk_total = []
+    outcome_seq_max_total = []
+
+
+    # 🔁 4. Loopa över alla trades
+    for t in trades:
+        rr_l = t.get("rr_logisk")
+        rr_m = t.get("rr_max")
+        outcome = t.get("outcome")
+
+        # ⛔️ Hoppa över tomma trades
+        if (not rr_l or str(rr_l).strip() == "") and (not rr_m or str(rr_m).strip() == "") and (not outcome or outcome == "none"):
+            continue
+
+        total_trades += 1  # ✅ Giltig trade räknas
+
+        direction = t.get("direction")
+
+
+        if outcome == "tp":
+            wins += 1
+            outcome_sequence.append("W")
+            if direction == "long":
+                longs_won += 1
+            elif direction == "short":
+                shorts_won += 1
+        elif outcome == "sl":
+            losses += 1
+            outcome_sequence.append("L")
+        else:
+            outcome_sequence.append("N")
+
+        # 🔢 4a. RR (vanliga fältet, inte logisk/max)
+        rr_val = t.get("rr")
+        if isinstance(rr_val, str):
+            rr_val = rr_val.strip()
+        try:
+            rr_list.append(float(rr_val))
+        except (TypeError, ValueError):
+            pass
+
+        # 🔢 4b. RR Logisk Exit (för totalsammanställning – separata variabler)
+        rr_l = t.get("rr_logisk")
+        rr_m = t.get("rr_max")
+        direction = t.get("direction")
+
+        if isinstance(rr_l, str): rr_l = rr_l.strip()
+        if isinstance(rr_m, str): rr_m = rr_m.strip()
+
+        try:
+            val_l = float(rr_l)
+            val_m = float(rr_m)
+            count_logisk_total += 1  # ✅ detta är det nya namnet
+
+            if val_l <= val_m:
+                # ✅ TP
+                rr_logisk_list_total.append(val_l)
+                wins_logisk_total += 1
+                outcome_seq_logisk_total.append("W")
+                if direction == "long":
+                    longs_won_logisk_total += 1
+                elif direction == "short":
+                    shorts_won_logisk_total += 1
+            else:
+                # ❌ SL
+                rr_logisk_list_total.append(-1)
+                losses_logisk_total += 1
+                outcome_seq_logisk_total.append("L")
+
+        except (TypeError, ValueError):
+            rr_logisk_list_total.append(0)
+            outcome_seq_logisk_total.append("N")
+
+
+
+
+
+        # 🔢 4c. RR Max (Fast Exit med korrekt filterhantering)
+        rr_m = t.get("rr_max")
+        direction = t.get("direction")
+
+        if isinstance(rr_m, str):
+            rr_m = rr_m.strip()
+
+        try:
+            val = float(rr_m)
+            count_max_trades += 1
+
+            if rr_max_filter:
+                target = float(rr_max_filter)
+                if val >= target:
+                    rr_max_list_total.append(target)  # 🔁 ⬅️ viktig ändring: använd target!
+                    wins_max_total += 1
+                    outcome_seq_max_total.append("W")
+                    if direction == "long":
+                        longs_won_max_total += 1
+                    elif direction == "short":
+                        shorts_won_max_total += 1
+                else:
+                    rr_max_list_total.append(-1)
+                    losses_max_total += 1
+                    outcome_seq_max_total.append("L")
+            else:
+                rr_max_list.append(val)
+                if val > 0:
+                    wins_max += 1
+                    outcome_seq_max_total.append("W")
+                    if direction == "long":
+                        longs_won_max += 1
+                    elif direction == "short":
+                        shorts_won_max += 1
+                elif val < 0:
+                    losses_max += 1
+                    outcome_seq_max_total.append("L")
+                else:
+                    outcome_seq_max_total.append("N")
+
+        except (TypeError, ValueError):
+            outcome_seq_max_total.append("N")
+
+
+
+
+    # 📈 5. Summerad statistik för alla typer
+    total_rr         = round(sum(rr_list), 2) if rr_list else 0
+    avg_rr           = round(total_rr / total_trades, 2) if total_trades else 0
+    winrate          = round((wins / total_trades) * 100, 1) if total_trades else 0
+
+    # 📈 5. Summerad statistik för logisk
+    total_rr_logisk = round(sum(rr_logisk_list_total), 2)
+    avg_rr_logisk = round(total_rr_logisk / count_logisk_total, 2) if count_logisk_total else 0
+    winrate_logisk = round((wins_logisk_total / count_logisk_total) * 100, 1) if count_logisk_total else 0
+
+    max_wins_row_logisk = max((sum(1 for _ in g) for k, g in groupby(outcome_seq_logisk_total) if k == "W"), default=0)
+    max_losses_row_logisk = max((sum(1 for _ in g) for k, g in groupby(outcome_seq_logisk_total) if k == "L"), default=0)
+
+
+    total_rr_max     = round(sum(rr_max_list_total), 2) 
+    avg_rr_max = round(total_rr_max / len(rr_max_list_total), 2) if rr_max_list_total else 0
+    winrate_max = round((wins_max_total / len(rr_max_list_total)) * 100, 1) if rr_max_list_total else 0
+
+    print("Fast Exit DEBUG")
+    print("rr_max_list:", rr_max_list)
+    print("TP:", wins_max)
+    print("SL:", losses_max)
+    print("Trades:", count_max_trades)
+    print("Longs won:", longs_won_max)
+    print("Shorts won:", shorts_won_max)
+
+
+    # 📊 6. Sekvensanalys (för max W/L i rad)
+    max_wins_row = max((sum(1 for _ in g) for k, g in groupby(outcome_sequence) if k == "W"), default=0)
+    max_losses_row = max((sum(1 for _ in g) for k, g in groupby(outcome_sequence) if k == "L"), default=0)
+
+    # 🔁 Sekvensanalys för logisk och fast exit
+    max_wins_row_logisk = max((sum(1 for _ in g) for k, g in groupby(outcome_seq_logisk_total) if k == "W"), default=0)
+    max_losses_row_logisk = max((sum(1 for _ in g) for k, g in groupby(outcome_seq_logisk_total) if k == "L"), default=0)
+
+    max_wins_row_max = max((sum(1 for _ in g) for k, g in groupby(outcome_seq_max_total) if k == "W"), default=0)
+    max_losses_row_max = max((sum(1 for _ in g) for k, g in groupby(outcome_seq_max_total) if k == "L"), default=0)
+
+    # 🧹 7. Skapa badge-struktur för aktiva filter
+    active_filters = {}
+    clear_links = {}
+    for key, values in filters.items():
+        non_empty = [v for v in values if v]
+        if non_empty:
+            active_filters[key] = non_empty
+            for v in non_empty:
+                updated_args = filters.copy()
+                updated_args[key] = [val for val in non_empty if val != v]
+                clear_links[f"{key}:{v}"] = url_for("stats") + "?" + urlencode(updated_args, doseq=True)
+
+    # 📊 Monthly stats
+    monthly_stats = {}
+    trades_by_month = defaultdict(list)
+    for t in trades:
+        try:
+            month = datetime.strptime(t["datum"], "%Y-%m-%d").strftime("%Y-%m")
+            trades_by_month[month].append(t)
+        except Exception:
+            continue
+    for month, trades_in_month in sorted(trades_by_month.items(), reverse=True):
+        rr_logisk_list = []
+        rr_max_list = []
+
+        wins_logisk = losses_logisk = wins_max = losses_max = 0
+        longs_won_logisk = shorts_won_logisk = 0
+        longs_won_max = shorts_won_max = 0
+
+        outcome_seq_logisk = []
+        outcome_seq_max = []
+
+        for t in trades_in_month:
+            # === Logisk Exit ===
+            direction = t.get("direction")
+            outcome = t.get("outcome")
+            rr_l = t.get("rr_logisk")
+
+            if isinstance(rr_l, str): rr_l = rr_l.strip()
+
+            try:
+                val = float(rr_l)
+
+                if outcome == "tp":
+                    rr_logisk_list.append(val)
+                    wins_logisk += 1
+                    outcome_seq_logisk.append("W")
+                    if direction == "long":
+                        longs_won_logisk += 1
+                    elif direction == "short":
+                        shorts_won_logisk += 1
+                elif outcome == "sl":
+                    rr_logisk_list.append(-1)
+                    losses_logisk += 1
+                    outcome_seq_logisk.append("L")
+                else:
+                    rr_logisk_list.append(0)
+                    outcome_seq_logisk.append("N")
+
+            except:
+                rr_logisk_list.append(0)
+                outcome_seq_logisk.append("N")
+
+            # === Fast Exit ===
+            rr_m = t.get("rr_max")
+            if rr_m is None or rr_m == "":
+                continue
+            if isinstance(rr_m, str): rr_m = rr_m.strip()
+            try:
+                val = float(rr_m)
+                if rr_max_filter:
+                    target = float(rr_max_filter)
+                    if val >= target:
+                        rr_max_list.append(target)
+                        wins_max += 1
+                        outcome_seq_max.append("W")
+                        if direction == "long":
+                            longs_won_max += 1
+                        elif direction == "short":
+                            shorts_won_max += 1
+                    else:
+                        rr_max_list.append(-1)
+                        losses_max += 1
+                        outcome_seq_max.append("L")
+                else:
+                    rr_max_list.append(val)
+                    if val > 0:
+                        wins_max += 1
+                        outcome_seq_max.append("W")
+                        if direction == "long":
+                            longs_won_max += 1
+                        elif direction == "short":
+                            shorts_won_max += 1
+                    elif val < 0:
+                        losses_max += 1
+                        outcome_seq_max.append("L")
+                    else:
+                        outcome_seq_max.append("N")
+            except:
+                continue
+
+        # ✅ Filtrera bort ogiltiga logiska rr
+        valid_rr_logisk = [v for v in rr_logisk_list if v != 0]
+        valid_wins_logisk = sum(1 for v in valid_rr_logisk if v > 0)
+        valid_losses_logisk = sum(1 for v in valid_rr_logisk if v < 0)
+        winrate_l = round((valid_wins_logisk / len(valid_rr_logisk)) * 100, 1) if valid_rr_logisk else 0
+        total_rr_l = round(sum(valid_rr_logisk), 2) if valid_rr_logisk else 0
+        avg_rr_l = round(total_rr_l / len(valid_rr_logisk), 2) if valid_rr_logisk else 0
+
+        # 🔁 Fast Exit kalkyl
+        def calc_stats(rr_list, wins, losses):
+            total = round(sum(rr_list), 2) if rr_list else 0
+            avg = round(total / len(rr_list), 2) if rr_list else 0
+            winrate = round((wins / len(rr_list)) * 100, 1) if rr_list else 0
+            return total, avg, wins, losses, winrate
+
+        total_rr_m, avg_rr_m, w_m, l_m, winrate_m = calc_stats(rr_max_list, wins_max, losses_max)
+
+        # 🔁 Sekvenser
+        max_wins_row_l = max((sum(1 for _ in g) for k, g in groupby(outcome_seq_logisk) if k == "W"), default=0)
+        max_losses_row_l = max((sum(1 for _ in g) for k, g in groupby(outcome_seq_logisk) if k == "L"), default=0)
+        max_wins_row_m = max((sum(1 for _ in g) for k, g in groupby(outcome_seq_max) if k == "W"), default=0)
+        max_losses_row_m = max((sum(1 for _ in g) for k, g in groupby(outcome_seq_max) if k == "L"), default=0)
+
+        monthly_stats[month] = {
+            "logisk": {
+                "total": total_rr_l,
+                "avg": avg_rr_l,
+                "wins": valid_wins_logisk,
+                "losses": valid_losses_logisk,
+                "winrate": winrate_l,
+                "longs_won": longs_won_logisk,
+                "shorts_won": shorts_won_logisk,
+                "max_wins_row": max_wins_row_l,
+                "max_losses_row": max_losses_row_l
+            },
+            "max": {
+                "total": total_rr_m,
+                "avg": avg_rr_m,
+                "wins": w_m,
+                "losses": l_m,
+                "winrate": winrate_m,
+                "longs_won": longs_won_max,
+                "shorts_won": shorts_won_max,
+                "max_wins_row": max_wins_row_m,
+                "max_losses_row": max_losses_row_m
+            },
+            "extra": {
+                "total_trades": len([
+                    t for t in trades_in_month
+                    if not (
+                        (not t.get("rr_logisk") or str(t.get("rr_logisk")).strip() == "") and
+                        (not t.get("rr_max") or str(t.get("rr_max")).strip() == "") and
+                        (not t.get("outcome") or t.get("outcome") == "none")
+                    )
+                ])
+            }
+        }
+
+
+    # 📤 8. Skicka allt till templaten
+    return render_template(
+        "stats.html",
+        total_trades=total_trades,
+        total_rr=total_rr,
+        avg_rr=avg_rr,
+        wins=wins,
+        losses=losses,
+        winrate=winrate,
+
+        # Logisk exit
+        total_rr_logisk=total_rr_logisk,
+        avg_rr_logisk=avg_rr_logisk,
+        winrate_logisk=winrate_logisk,
+        wins_logisk=wins_logisk_total,
+        losses_logisk=losses_logisk_total,
+        total_trades_logisk=count_logisk_total,
+        longs_won_logisk=longs_won_logisk_total,
+        shorts_won_logisk=shorts_won_logisk_total,
+        max_wins_row_logisk=max_wins_row_logisk,
+        max_losses_row_logisk=max_losses_row_logisk,
+
+
+        # Fast exit
+        total_rr_max=total_rr_max,
+        avg_rr_max=avg_rr_max,
+        winrate_max=winrate_max,
+        wins_max=wins_max_total,
+        losses_max=losses_max_total,
+        total_trades_max=count_max_trades,
+        longs_won_max=longs_won_max_total,
+        shorts_won_max=shorts_won_max_total,
+        max_wins_row_max=max_wins_row_max,
+        max_losses_row_max=max_losses_row_max,
+
+
+        # Övrigt
+        longs_won=longs_won,
+        shorts_won=shorts_won,
+        max_wins_row=max_wins_row,
+        max_losses_row=max_losses_row,
+        rr_max_filter=rr_max_filter,
+
+        active_filters=active_filters,
+        clear_links=clear_links,
+
+        monthly_stats=monthly_stats,
+
+
+    )
+
+
+if __name__ == "__main__":
+    app.run(host="0.0.0.0", port=5000, debug=True)
+

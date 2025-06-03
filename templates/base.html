@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html lang="sv">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>TradeVerge</title>
+    <!-- <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet"> -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body class="bg-gray-950 text-white">
+  <div class="flex h-screen overflow-hidden max-w-screen-2xl mx-auto">
+    <!-- SIDOMENY -->
+    <aside class="w-64 bg-gray-900 p-4 flex flex-col">
+      <!-- LOGO -->
+        <div class="mb-6">
+          <h1 class="text-2xl font-bold text-white">📈 TradeVerge</h1>
+        </div>
+
+        <!-- NAVIGATION -->
+        <div class="space-y-2">
+          <a href="{{ url_for('index', **request.args) }}" class="block py-2 px-4 rounded hover:bg-gray-800 text-white">
+            🏠 Dashboard
+          </a>
+
+          <a href="{{ url_for('stats', **request.args) }}" class="block py-2 px-4 rounded hover:bg-gray-800 text-white">
+            📈 Statistik
+          </a>
+
+          <hr class="my-4 border-gray-700">
+          <button id="openModalBtn" class="w-full py-2 bg-green-600 hover:bg-green-700 rounded text-white flex items-center justify-center gap-2">
+            <span>➕</span> <span>Add New Trade</span>
+          </button>
+        </div>
+    </aside>
+
+    <!-- INNEHÅLL -->
+    <div class="flex-1 overflow-y-auto">
+      {% include 'partials/header.html' %}
+      <main class="p-6">
+        {% block content %}{% endblock %}
+      </main>
+    </div>
+  </div>
+
+  {% block scripts %}{% endblock %}
+  {% include 'partials/modal.html' %}
+</body>
+</html>

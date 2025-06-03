@@ -1,0 +1,112 @@
+<!-- HEADER MED FILTRERING -->
+<header class="sticky top-0 z-50 bg-gray-900 shadow px-6 py-4">
+  <div class="flex justify-between items-center">
+    <!-- <h1 class="text-2xl font-bold">📈 TradeVerge</h1> -->
+    <button id="toggleFilters" class="bg-gray-700 px-4 py-2 rounded hover:bg-gray-600 text-white text-sm relative">
+      🔍 Basic Filters
+      {% if request.args %}
+          <span class="absolute top-0 right-0 -mt-1 -mr-1 w-2 h-2 bg-green-400 rounded-full"></span>
+      {% endif %}
+    </button>
+  </div>
+
+  <!-- Filtreringsformulär -->
+  <form id="filtersForm" class="hidden grid grid-cols-1 md:grid-cols-3 gap-4 relative z-20 bg-gray-900 p-4 rounded shadow" method="get">
+    <!-- Vanliga dropdowns -->
+    {% set select_fields = {
+      "instrument": ["", "de40", "sp500"],
+      "setup": ["", "reversal", "continuation"],
+      "direction": ["", "long", "short"],
+      "outcome": ["", "tp", "sl", "none"],
+      "rr": ["", "-1", "1", "1.5", "2", "2.5", "3", "3.5", "4", "4.5", "5"]
+    } %}
+
+    {% for name, options in select_fields.items() %}
+    <div>
+      <label class="block text-sm mb-1">{{ name.title() }}</label>
+      <select name="{{ name }}" class="w-full p-2 bg-gray-700 rounded border border-gray-600">
+        {% for opt in options %}
+        <option value="{{ opt }}" {% if request.args.get(name) == opt %}selected{% endif %}>{{ opt or 'Alla' }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    {% endfor %}
+
+    <!-- Datumintervall -->
+    <div>
+      <label class="block text-sm mb-1">📅 Från datum</label>
+      <input type="date" name="start_date" value="{{ request.args.get('start_date', '') }}" class="w-full p-2 bg-gray-700 rounded border border-gray-600">
+    </div>
+    <div>
+      <label class="block text-sm mb-1">📅 Till datum</label>
+      <input type="date" name="end_date" value="{{ request.args.get('end_date', '') }}" class="w-full p-2 bg-gray-700 rounded border border-gray-600">
+    </div>
+    <!-- Fast Exit-nivå (rr_max_filter) -->
+    <div>
+      <label class="block text-sm mb-1">📏 Fast Exit RR (rr_max)</label>
+      <select name="rr_max_filter" class="w-full p-2 bg-gray-700 rounded border border-gray-600">
+        <option value="">Alla</option>
+        <option value="1" {% if request.args.get('rr_max_filter') == '1' %}selected{% endif %}>1R</option>
+        <option value="2" {% if request.args.get('rr_max_filter') == '2' %}selected{% endif %}>2R</option>
+        <option value="3" {% if request.args.get('rr_max_filter') == '3' %}selected{% endif %}>3R</option>
+        <option value="4" {% if request.args.get('rr_max_filter') == '4' %}selected{% endif %}>4R</option>
+        <option value="5" {% if request.args.get('rr_max_filter') == '5' %}selected{% endif %}>5R</option>
+      </select>
+    </div>
+
+
+    <!-- Checkbox-dropdowns -->
+    {% set dropdown_filters = {
+      'entry_logic': ['ÅT Säljare tappar', 'ÅT Köpare tappar'],
+      'exit_logic': ['Innan ny topp/botten', 'Efter ny topp/botten'],
+      'premarket': ['Första OB under PM', 'Första OB under PPM', 'Kontroll under PM'],
+      'obalans': ['Traden är tagen på 2:a OB', 'Traden är tagen på 1:a OB'],
+      'återtesten': ['Hämtar likviditet i min zon', 'Miss första ÅT, sen ny topp/botten', 'Miss första ÅT, sen ingen ny topp/botten'],
+      'reversal_rules': ['Tidigare zon tas ut', 'Stark avsats', 'BAS - IBI/PBI', 'Ej återtest från PBI'],
+      'continuation_rules': ['Köpare/Säljare kommer in och tappar', 'Ny topp/botten', 'Stark avsats', 'BAS - PBI']
+    } %}
+
+    {% for name, options in dropdown_filters.items() %}
+    <div class="relative">
+      <label class="block text-sm mb-1">{{ name|title|replace("_", " ") }}</label>
+      <button type="button" class="filter-dropdown-toggle w-full p-2 bg-gray-700 border border-gray-600 rounded text-left">
+        Välj {{ name }}
+      </button>
+      <div class="filter-dropdown hidden absolute z-10 mt-1 w-full bg-gray-800 border border-gray-600 rounded shadow max-h-60 overflow-y-auto p-2">
+        {% for opt in options %}
+        <label class="block text-sm">
+          <input type="checkbox" name="{{ name }}" value="{{ opt }}" class="mr-2"
+            {% if request.args.getlist(name) and opt in request.args.getlist(name) %}checked{% endif %}>
+          {{ opt }}
+        </label>
+        {% endfor %}
+      </div>
+    </div>
+    {% endfor %}
+
+    <!-- Badges -->
+    <div class="col-span-full mt-4 flex flex-wrap gap-2 text-sm">
+      {% for key, values in active_filters.items() %}
+        {% for val in values %}
+          <span class="bg-green-700 px-3 py-1 rounded text-white flex items-center">
+            {{ key.replace("_", " ")|title }}: {{ val }}
+            <a href="{{ clear_links[key ~ ':' ~ val] }}" class="ml-2 text-white hover:text-red-300">×</a>
+          </span>
+        {% endfor %}
+      {% endfor %}
+
+      {% if active_filters %}
+        <a href="{{ request.path }}" onclick="localStorage.setItem('filtersVisible', false)" class="text-red-400 hover:text-red-600 text-sm ml-4">❌ Rensa alla</a>
+      {% endif %}
+    </div>
+
+
+
+    <!-- Submit -->
+    <div class="col-span-full mt-4 flex justify-end">
+      <button type="submit" class="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded">
+        🔎 Filtrera
+      </button>
+    </div>
+  </form>
+</header>

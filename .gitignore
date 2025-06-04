@@ -1,0 +1,27 @@
+# 🔁 Python cache-filer
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+
+# 🐍 Virtuella miljöer
+venv/
+.env
+
+# 🧠 IDE-filer (t.ex. VSCode, PyCharm)
+.vscode/
+.idea/
+
+# 💾 Lokala databaser
+# *.db
+*.sqlite3
+instance/
+
+# 📷 Operativsystem & bilder
+.DS_Store
+Thumbs.db
+
+# 🧪 Tester & loggar
+*.log
+*.bak
+*.tmp

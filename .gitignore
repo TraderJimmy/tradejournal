@@ -13,7 +13,7 @@ venv/
 .idea/
 
 # 💾 Lokala databaser
-# *.db
+*.db
 *.sqlite3
 instance/
 

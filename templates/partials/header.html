@@ -1,14 +1,41 @@
 <!-- HEADER MED FILTRERING -->
 <header class="sticky top-0 z-50 bg-gray-900 shadow px-6 py-4">
-  <div class="flex justify-between items-center">
-    <!-- <h1 class="text-2xl font-bold">📈 TradeVerge</h1> -->
-    <button id="toggleFilters" class="bg-gray-700 px-4 py-2 rounded hover:bg-gray-600 text-white text-sm relative">
-      🔍 Basic Filters
-      {% if request.args %}
-          <span class="absolute top-0 right-0 -mt-1 -mr-1 w-2 h-2 bg-green-400 rounded-full"></span>
-      {% endif %}
-    </button>
+  <div class="flex justify-between items-center flex-wrap gap-4">
+
+    <!-- 🗂️ Visat journalnamn -->
+    <div class="text-white font-semibold text-lg flex items-center gap-2">
+      🗂️ {{ active_journal_name }}
+    </div>
+
+    <!-- 🔍 Filtreringsknapp -->
+    <div class="flex-1 flex justify-center">
+      <button id="toggleFilters" class="bg-gray-700 px-4 py-2 rounded hover:bg-gray-600 text-white text-sm relative">
+        🔍 Basic Filters
+        {% if request.args %}
+            <span class="absolute top-0 right-0 -mt-1 -mr-1 w-2 h-2 bg-green-400 rounded-full"></span>
+        {% endif %}
+      </button>
+    </div>
+
+    <!-- 📘 Journal dropdown + ny journal -->
+    <div class="flex items-center gap-2">
+      <form method="post" action="/switch_journal">
+        <select name="journal_id" onchange="this.form.submit()" class="bg-gray-800 text-white p-2 rounded text-sm border border-gray-600">
+          {% for journal in journals %}
+            <option value="{{ journal.id }}" {% if journal.id == active_journal_id %}selected{% endif %}>
+              {{ journal.name }}
+            </option>
+          {% endfor %}
+        </select>
+      </form>
+      <form method="post" action="/add_journal" class="flex items-center gap-1">
+        <input type="text" name="new_journal" placeholder="Ny journal" class="p-1 px-2 text-sm bg-gray-800 text-white rounded border border-gray-600">
+        <button class="px-2 py-1 bg-green-600 text-sm rounded hover:bg-green-700" title="Skapa journal">➕</button>
+      </form>
+    </div>
+
   </div>
+
 
   <!-- Filtreringsformulär -->
   <form id="filtersForm" class="hidden grid grid-cols-1 md:grid-cols-3 gap-4 relative z-20 bg-gray-900 p-4 rounded shadow" method="get">

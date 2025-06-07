@@ -70,6 +70,19 @@ document.addEventListener('DOMContentLoaded', function () {
         tradeForm.querySelector('input[name="rr_max"]').value = data.rr_max || "";
         tradeForm.querySelector('textarea[name="kommentar"]').value = data.kommentar || "";
 
+        // 🔢 Nya numeriska fält
+        tradeForm.querySelector('input[name="entry_price"]').value = data.entry_price ?? "";
+        tradeForm.querySelector('input[name="exit_price"]').value = data.exit_price ?? "";
+        tradeForm.querySelector('input[name="stop_loss"]').value = data.stop_loss ?? "";
+        tradeForm.querySelector('input[name="take_profit"]').value = data.take_profit ?? "";
+        tradeForm.querySelector('input[name="quantity"]').value = data.quantity ?? "";
+        tradeForm.querySelector('input[name="fees"]').value = data.fees ?? "";
+        tradeForm.querySelector('input[name="exit_date"]').value = data.exit_date ?? "";
+        tradeForm.querySelector('input[name="gross_pl"]').value = data.gross_pl ?? "";
+        tradeForm.querySelector('input[name="net_pl"]').value = data.net_pl ?? "";
+        tradeForm.querySelector('input[name="exit_price_max"]').value = data.exit_price_max ?? "";
+
+
         ['direction', 'outcome'].forEach(field => {
           if (data[field]) {
             const radio = tradeForm.querySelector(`input[name="${field}"][value="${data[field]}"]`);
@@ -192,4 +205,13 @@ document.addEventListener('DOMContentLoaded', function () {
       document.getElementById('filtersForm').submit();
     });
   });
+
+  // 🔔 Auto-stäng flash-meddelande
+  const flashContainer = document.getElementById("flash-messages");
+  if (flashContainer) {
+    setTimeout(() => {
+      flashContainer.remove();
+    }, 4000); // 4 sekunder
+  }
 });
+

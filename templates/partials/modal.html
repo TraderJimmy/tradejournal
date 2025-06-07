@@ -111,27 +111,101 @@
 
                       <!-- RR Logisk -->
                       <div class="w-1/2">
-                        <label class="block font-semibold mb-1">🎯 RR Logisk (teknisk exit)</label>
-                        <input type="number" step="0.1" name="rr_logisk" placeholder="t.ex. 2.5 eller -1"
+                        <label class="block font-semibold mb-1">🎯 RR Logisk</label>
+                        <input type="number" step="any" name="rr_logisk" placeholder="t.ex. 2.5 eller -1"
                                class="w-full p-2 rounded bg-gray-700 text-white border border-gray-600">
                       </div>
 
                       <!-- RR Max -->
                       <div class="w-1/2">
-                        <label class="block font-semibold mb-1">📏 RR Max (fast exit-nivå)</label>
-                        <input type="number" step="0.1" name="rr_max" placeholder="t.ex. 3 eller -1"
+                        <label class="block font-semibold mb-1">📏 RR Max</label>
+                        <input type="number" step="0.01" name="rr_max" placeholder="t.ex. 3 eller -1"
+                               class="w-full p-2 rounded bg-gray-700 text-white border border-gray-600">
+                      </div>
+                    </div>
+
+                    <!-- NYA FÄLT: Trade-detaljer -->
+                    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mb-4">
+                      <!-- Entry Price -->
+                      <div>
+                        <label class="block font-semibold mb-1">📥 Entry Price:</label>
+                        <input type="number" step="0.01" name="entry_price"
+                               class="w-full p-2 rounded bg-gray-700 text-white border border-gray-600"
+                               placeholder="t.ex. 4421.50">
+                      </div>
+
+                      <!-- Exit Price -->
+                      <div>
+                        <label class="block font-semibold mb-1">📤 Exit Price:</label>
+                        <input type="number" step="0.01" name="exit_price"
+                               class="w-full p-2 rounded bg-gray-700 text-white border border-gray-600"
+                               placeholder="t.ex. 4430.75">
+                      </div>
+
+                      <!-- Exit Price Max -->
+                      <div>
+                        <label class="block font-semibold mb-1">📏 Exit Price Max:</label>
+                        <input type="number" step="0.01" name="exit_price_max"
+                               class="w-full p-2 rounded bg-gray-700 text-white border border-gray-600"
+                               placeholder="T.ex. 4455.00">
+                      </div>
+
+                      <!-- Quantity -->
+                      <div>
+                        <label class="block font-semibold mb-1">🔢 Antal kontrakt:</label>
+                        <input type="number" step="any" name="quantity" placeholder="t.ex. 1.37"
+                               class="w-full p-2 rounded bg-gray-700 text-white border border-gray-600"
+                               placeholder="t.ex. 2">
+                      </div>
+
+                      <!-- Stop Loss -->
+                      <div>
+                        <label class="block font-semibold mb-1">🛑 Stop Loss:</label>
+                        <input type="number" step="0.01" name="stop_loss"
+                               class="w-full p-2 rounded bg-gray-700 text-white border border-gray-600"
+                               placeholder="t.ex. 4410.25">
+                      </div>
+
+                      <!-- Take Profit -->
+                      <div>
+                        <label class="block font-semibold mb-1">🎯 Take Profit:</label>
+                        <input type="number" step="0.01" name="take_profit"
+                               class="w-full p-2 rounded bg-gray-700 text-white border border-gray-600"
+                               placeholder="t.ex. 4450.00">
+                      </div>
+
+                      <!-- Exit Date -->
+                      <div>
+                        <label class="block font-semibold mb-1">📆 Exitdatum:</label>
+                        <input type="date" name="exit_date"
                                class="w-full p-2 rounded bg-gray-700 text-white border border-gray-600">
                       </div>
 
+                      <!-- Fees -->
+                      <div>
+                        <label class="block font-semibold mb-1">💸 Avgifter (fees):</label>
+                        <input type="number" step="0.01" name="fees"
+                               class="w-full p-2 rounded bg-gray-700 text-white border border-gray-600"
+                               placeholder="t.ex. 2.5">
+                      </div>
 
+                      <!-- Gross P&L -->
+                      <div>
+                        <label class="block font-semibold mb-1">📈 Gross P&L:</label>
+                        <input type="number" step="0.01" name="gross_pl"
+                               class="w-full p-2 rounded bg-gray-700 text-white border border-gray-600"
+                               placeholder="T.ex. 80.00">
+                      </div>
+
+                      <!-- Net P&L -->
+                      <div>
+                        <label class="block font-semibold mb-1">📉 Net P&L:</label>
+                        <input type="number" step="0.01" name="net_pl"
+                               class="w-full p-2 rounded bg-gray-700 text-white border border-gray-600"
+                               placeholder="T.ex. 77.50">
+                      </div>
                     </div>
 
-
-
-                    <div>
-                        <label class="block font-semibold mb-1">Kommentarer:</label>
-                        <textarea name="kommentar" rows="3" class="w-full p-2 rounded bg-gray-700 text-white border border-gray-600"></textarea>
-                    </div>
                 </div>
 
                 <!-- TAB 2: Taggar -->
@@ -248,7 +322,10 @@
                         </div>
                       </div>
                     </div>
-
+                    <div>
+                        <label class="block font-semibold mb-1">Kommentarer:</label>
+                        <textarea name="kommentar" rows="3" class="w-full p-2 rounded bg-gray-700 text-white border border-gray-600"></textarea>
+                    </div>
 
                 </div>
 

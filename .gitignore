@@ -14,6 +14,7 @@ venv/
 
 # 💾 Lokala databaser
 *.db
+tradejournal.db
 *.sqlite3
 instance/
 
@@ -25,3 +26,4 @@ Thumbs.db
 *.log
 *.bak
 *.tmp
+*.db

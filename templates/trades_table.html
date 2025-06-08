@@ -1,0 +1,60 @@
+{% extends "base.html" %}
+{% block content %}
+<h1 class="text-2xl font-bold mb-4">📋 Alla Trades</h1>
+
+<div class="overflow-x-auto bg-gray-900 rounded shadow max-w-full">
+  <table class="min-w-full text-sm text-white table-auto whitespace-nowrap">
+    <thead class="bg-gray-800 text-left">
+      <tr>
+        <th class="px-2 py-2">Entry Date</th>
+        <th class="px-2 py-2">Exit Date</th>
+        <th class="px-2 py-2">Instrument</th>
+        <th class="px-2 py-2">Setup</th>
+        <th class="px-2 py-2">Direction</th>
+        <th class="px-2 py-2">Outcome</th>
+        <th class="px-2 py-2">Quantity</th>
+        <th class="px-2 py-2">Entry Price</th>
+        <th class="px-2 py-2">Exit Price</th>
+        <th class="px-2 py-2">TP Price</th>
+        <th class="px-2 py-2">SL Price</th>
+        <th class="px-2 py-2">Fees (€)</th>
+        <th class="px-2 py-2">Return (€)</th>
+        <th class="px-2 py-2">RRR-Max</th>
+        <th class="px-2 py-2">RRR-Planned</th>
+        <th class="px-2 py-2">R-Multiple</th>
+        <th class="px-2 py-2">Entry Logik</th>
+        <th class="px-2 py-2">Exit Logik</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for t in trades %}
+      <tr class="border-t border-gray-800 hover:bg-gray-800 cursor-pointer"
+          data-edit-id="{{ t.id }}">
+        <td class="px-2 py-2">{{ t.datum }}</td>
+        <td class="px-2 py-2">{{ t.exit_date }}</td>
+        <td class="px-2 py-2">{{ t.instrument }}</td>
+        <td class="px-2 py-2">{{ t.setup }}</td>
+        <td class="px-2 py-2">{{ t.direction }}</td>
+        <td class="px-2 py-2">{{ t.outcome }}</td>
+        <td class="px-2 py-2">{{ t.quantity }}</td>
+        <td class="px-2 py-2">{{ t.entry_price }}</td>
+        <td class="px-2 py-2">{{ t.exit_price }}</td>
+        <td class="px-2 py-2">{{ t.take_profit }}</td>
+        <td class="px-2 py-2">{{ t.stop_loss }}</td>
+        <td class="px-2 py-2">{{ t.fees }}</td>
+        <td class="px-2 py-2">{{ t.net_pl }}</td>
+        <td class="px-2 py-2">{{ t.rrr_max or "-" }}</td>
+        <td class="px-2 py-2">{{ t.rrr_planned or "-" }}</td>
+        <td class="px-2 py-2">{{ t.r_multiple or "-" }}</td>
+        <td class="px-2 py-2">{{ t.entry_logic }}</td>
+        <td class="px-2 py-2">{{ t.exit_logic }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endblock %}
+
+{% block scripts %}
+  <script src="{{ url_for('static', filename='scripts.js') }}"></script>
+{% endblock %}

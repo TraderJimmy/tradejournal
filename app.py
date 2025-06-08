@@ -4,7 +4,7 @@ from urllib.parse import urlencode
 from itertools import groupby
 from datetime import datetime
 from io import StringIO
-from helpers import get_journal_name, get_all_journals, get_active_journal_name, get_table_columns
+from helpers import get_journal_name, get_all_journals, get_active_journal_name, get_table_columns, calculate_rr_stats
 import sqlite3
 import os
 import uuid
@@ -139,6 +139,7 @@ def get_all_trades(filters=None, journal_id=1):
             'continuation_rules': trade['continuation_rules'],
             'entry_price': trade['entry_price'],
             'exit_price': trade['exit_price'],
+            'exit_price_max': trade['exit_price_max'],
             'stop_loss': trade['stop_loss'],
             'take_profit': trade['take_profit'],
             'quantity': trade['quantity'],
@@ -528,6 +529,90 @@ def filtered_trades():
         trades=trades,
         all_tags=all_tags,
         active_filters=active_filters,
+        clear_links=clear_links
+    )
+
+@app.route("/trades/table")
+def trades_table():
+    journal_id = get_active_journal()
+    filters = request.args.to_dict(flat=False)
+    trades, _ = get_all_trades(filters=filters, journal_id=journal_id)
+
+    for t in trades:
+        entry = t.get("entry_price")
+        exit_ = t.get("exit_price")
+        exit_max = t.get("exit_price_max")
+        tp = t.get("take_profit")
+        sl = t.get("stop_loss")
+        direction = t.get("direction")
+
+        try:
+            entry = float(entry)
+            exit_ = float(exit_) if exit_ is not None else None
+            exit_max = float(exit_max) if exit_max is not None else None
+            tp = float(tp) if tp is not None else None
+            sl = float(sl) if sl is not None else None
+        except (ValueError, TypeError):
+            entry = exit_ = exit_max = tp = sl = None
+
+        risk = abs(entry - sl) if entry is not None and sl is not None else None
+
+        # 🔹 RRR Planned (entry -> TP)
+        if risk and tp is not None:
+            if direction == "long":
+                t["rrr_planned"] = round((tp - entry) / risk, 2)
+            elif direction == "short":
+                t["rrr_planned"] = round((entry - tp) / risk, 2)
+            else:
+                t["rrr_planned"] = None
+        else:
+            t["rrr_planned"] = None
+
+        # 🔸 RRR Max (entry -> exit_price_max)
+        if risk and exit_max is not None:
+            if direction == "long":
+                t["rrr_max"] = round((exit_max - entry) / risk, 2)
+            elif direction == "short":
+                t["rrr_max"] = round((entry - exit_max) / risk, 2)
+            else:
+                t["rrr_max"] = None
+        else:
+            t["rrr_max"] = None
+
+        # 🟥 R-Multiple (entry -> exit)
+        if risk and exit_ is not None:
+            if direction == "long":
+                t["r_multiple"] = round((exit_ - entry) / risk, 2)
+            elif direction == "short":
+                t["r_multiple"] = round((entry - exit_) / risk, 2)
+            else:
+                t["r_multiple"] = None
+        else:
+            t["r_multiple"] = None
+
+
+    # 🧹 Skapa länkar för att rensa enskilda filter
+    clear_links = {}
+    base_args = filters.copy()
+
+    for key, values in filters.items():
+        for val in values:
+            new_args = base_args.copy()
+            new_vals = new_args.get(key, []).copy()
+            if val in new_vals:
+                new_vals.remove(val)
+            if new_vals:
+                new_args[key] = new_vals
+            else:
+                new_args.pop(key, None)
+
+            clear_links[f"{key}:{val}"] = f"/trades/table?{urlencode(new_args, doseq=True)}"
+
+
+    return render_template(
+        "trades_table.html",
+        trades=trades,
+        active_filters=filters,
         clear_links=clear_links
     )
 
@@ -995,229 +1080,125 @@ def stats():
 
 @app.route("/stats/details")
 def stats_details():
-    # 📥 1. Läs in filter från URL-parametrar
+
     filters = request.args.to_dict(flat=False)
     rr_max_filter = filters.get("rr_max_filter", [None])[0]
-
-    # 🟢 Hämta aktiv journal
     journal_id = get_active_journal()
 
-    # 🔄 Hämta alla journaler (till dropdown)
-    conn = get_db_connection()
-    cursor = conn.cursor()
-    journals = cursor.execute("SELECT * FROM journals ORDER BY created DESC").fetchall()
+    # Hämta alla journaler och namnet på aktiv
+    journals = get_all_journals()
+    active_journal_name = get_active_journal_name(journal_id, journals)
 
-    # 🔍 Hämta namn på aktiv journal
-    active_journal_name = None
-    for j in journals:
-        if j["id"] == journal_id:
-            active_journal_name = j["name"]
-            break
-    conn.close()
-
-    # 🧮 Hämta filtrerade trades för aktuell journal
+    # Hämta trades för journalen
     trades, _ = get_all_trades(filters, journal_id=journal_id)
 
-    # 📊 3. Initiera variabler för Total-statistik
-    total_trades = 0
-    rr_list = []             # Ursprungliga rr-fältet
-    rr_logisk_list = []      # För teknisk/logisk exit
-    rr_max_list = []         # För fast exit
-    rr_max_list_total = []
+    # Initiera statistikvariabler
+    total_trades_logisk = total_trades_max = 0
+    wins_logisk = losses_logisk = 0
+    wins_max = losses_max = 0
+    rr_logisk_list = []
+    rr_max_list = []
 
-    wins = 0
-    losses = 0
-    wins_logisk = 0
-    losses_logisk = 0
-    wins_max = 0
-    losses_max = 0
-    longs_won = 0
-    shorts_won = 0
-    outcome_sequence = []
-    outcome_seq_logisk = []
-    outcome_seq_max = []
-
-    longs_won_logisk = 0
-    shorts_won_logisk = 0
-    count_logisk_trades = 0
-    count_max_trades = 0
-    longs_won_max = 0
-    shorts_won_max = 0
-
-    wins_max_total = 0
-    losses_max_total = 0
-    longs_won_max_total = 0
-    shorts_won_max_total = 0
-
-
-    rr_logisk_list_total = []
-    wins_logisk_total = 0
-    losses_logisk_total = 0
-    count_logisk_total = 0
-    longs_won_logisk_total = 0
-    shorts_won_logisk_total = 0
-    outcome_seq_logisk_total = []
-    outcome_seq_max_total = []
-
-
-    # 🔁 4. Loopa över alla trades
     for t in trades:
-        rr_l = t.get("rr_logisk")
-        rr_m = t.get("rr_max")
-        outcome = t.get("outcome")
+        rr_data = calculate_rr_stats(t)
+        rrr_planned = rr_data["rrr_planned"]
+        rrr_max = rr_data["rrr_max"]
 
-        # ⛔️ Hoppa över tomma trades
-        if (not rr_l or str(rr_l).strip() == "") and (not rr_m or str(rr_m).strip() == "") and (not outcome or outcome == "none"):
+        if rrr_planned is not None and rrr_max is not None:
+            total_trades_logisk += 1
+            if rrr_planned <= rrr_max:
+                wins_logisk += 1
+                rr_logisk_list.append(rrr_planned)
+            else:
+                losses_logisk += 1
+                rr_logisk_list.append(-1)
+
+        if rrr_max is not None:
+            total_trades_max += 1
+            if rr_max_filter:
+                try:
+                    target = float(rr_max_filter)
+                    if rrr_max >= target:
+                        wins_max += 1
+                        rr_max_list.append(target)
+                    else:
+                        losses_max += 1
+                        rr_max_list.append(-1)
+                except:
+                    continue
+            else:
+                if rrr_max > 0:
+                    wins_max += 1
+                elif rrr_max < 0:
+                    losses_max += 1
+                rr_max_list.append(rrr_max)
+
+    def calc_stats(rrs, wins, losses):
+        total = round(sum(rrs), 2) if rrs else 0
+        avg = round(total / len(rrs), 2) if rrs else 0
+        winrate = round((wins / len(rrs)) * 100, 1) if rrs else 0
+        return total, avg, winrate, wins, losses, len(rrs)
+
+    # Summerad statistik
+    total_rr_logisk, avg_rr_logisk, winrate_logisk, wins_logisk, losses_logisk, count_logisk_total = calc_stats(rr_logisk_list, wins_logisk, losses_logisk)
+    total_rr_max, avg_rr_max, winrate_max, wins_max, losses_max, count_max_total = calc_stats(rr_max_list, wins_max, losses_max)
+
+    # Grupp per månad
+    trades_by_month = defaultdict(list)
+    for t in trades:
+        try:
+            month = datetime.strptime(t["datum"], "%Y-%m-%d").strftime("%Y-%m")
+            trades_by_month[month].append(t)
+        except:
             continue
 
-        total_trades += 1  # ✅ Giltig trade räknas
+    monthly_stats = {}
+    for month, month_trades in sorted(trades_by_month.items(), reverse=True):
+        m_rr_logisk = []
+        m_rr_max = []
+        w_l = l_l = w_m = l_m = 0
 
-        direction = t.get("direction")
+        for t in month_trades:
+            rr = calculate_rr_stats(t)
+            rrr_planned = rr["rrr_planned"]
+            rrr_max = rr["rrr_max"]
 
-
-        if outcome == "tp":
-            wins += 1
-            outcome_sequence.append("W")
-            if direction == "long":
-                longs_won += 1
-            elif direction == "short":
-                shorts_won += 1
-        elif outcome == "sl":
-            losses += 1
-            outcome_sequence.append("L")
-        else:
-            outcome_sequence.append("N")
-
-        # 🔢 4a. RR (vanliga fältet, inte logisk/max)
-        rr_val = t.get("rr")
-        if isinstance(rr_val, str):
-            rr_val = rr_val.strip()
-        try:
-            rr_list.append(float(rr_val))
-        except (TypeError, ValueError):
-            pass
-
-        # 🔢 4b. RR Logisk Exit (för totalsammanställning – separata variabler)
-        rr_l = t.get("rr_logisk")
-        rr_m = t.get("rr_max")
-        direction = t.get("direction")
-
-        if isinstance(rr_l, str): rr_l = rr_l.strip()
-        if isinstance(rr_m, str): rr_m = rr_m.strip()
-
-        try:
-            val_l = float(rr_l)
-            val_m = float(rr_m)
-            count_logisk_total += 1  # ✅ detta är det nya namnet
-
-            if val_l <= val_m:
-                # ✅ TP
-                rr_logisk_list_total.append(val_l)
-                wins_logisk_total += 1
-                outcome_seq_logisk_total.append("W")
-                if direction == "long":
-                    longs_won_logisk_total += 1
-                elif direction == "short":
-                    shorts_won_logisk_total += 1
-            else:
-                # ❌ SL
-                rr_logisk_list_total.append(-1)
-                losses_logisk_total += 1
-                outcome_seq_logisk_total.append("L")
-
-        except (TypeError, ValueError):
-            rr_logisk_list_total.append(0)
-            outcome_seq_logisk_total.append("N")
-
-
-
-
-
-        # 🔢 4c. RR Max (Fast Exit med korrekt filterhantering)
-        rr_m = t.get("rr_max")
-        direction = t.get("direction")
-
-        if isinstance(rr_m, str):
-            rr_m = rr_m.strip()
-
-        try:
-            val = float(rr_m)
-            count_max_trades += 1
-
-            if rr_max_filter:
-                target = float(rr_max_filter)
-                if val >= target:
-                    rr_max_list_total.append(target)  # 🔁 ⬅️ viktig ändring: använd target!
-                    wins_max_total += 1
-                    outcome_seq_max_total.append("W")
-                    if direction == "long":
-                        longs_won_max_total += 1
-                    elif direction == "short":
-                        shorts_won_max_total += 1
+            if rrr_planned is not None and rrr_max is not None:
+                if rrr_planned <= rrr_max:
+                    m_rr_logisk.append(rrr_planned)
+                    w_l += 1
                 else:
-                    rr_max_list_total.append(-1)
-                    losses_max_total += 1
-                    outcome_seq_max_total.append("L")
-            else:
-                rr_max_list.append(val)
-                if val > 0:
-                    wins_max += 1
-                    outcome_seq_max_total.append("W")
-                    if direction == "long":
-                        longs_won_max += 1
-                    elif direction == "short":
-                        shorts_won_max += 1
-                elif val < 0:
-                    losses_max += 1
-                    outcome_seq_max_total.append("L")
+                    m_rr_logisk.append(-1)
+                    l_l += 1
+
+            if rrr_max is not None:
+                if rr_max_filter:
+                    try:
+                        target = float(rr_max_filter)
+                        if rrr_max >= target:
+                            m_rr_max.append(target)
+                            w_m += 1
+                        else:
+                            m_rr_max.append(-1)
+                            l_m += 1
+                    except:
+                        continue
                 else:
-                    outcome_seq_max_total.append("N")
+                    m_rr_max.append(rrr_max)
+                    if rrr_max > 0:
+                        w_m += 1
+                    elif rrr_max < 0:
+                        l_m += 1
 
-        except (TypeError, ValueError):
-            outcome_seq_max_total.append("N")
+        logisk_total, logisk_avg, logisk_wr, *_ = calc_stats(m_rr_logisk, w_l, l_l)
+        max_total, max_avg, max_wr, *_ = calc_stats(m_rr_max, w_m, l_m)
 
+        monthly_stats[month] = {
+            "logisk": {"total": logisk_total, "avg": logisk_avg, "winrate": logisk_wr, "wins": w_l, "losses": l_l},
+            "max": {"total": max_total, "avg": max_avg, "winrate": max_wr, "wins": w_m, "losses": l_m},
+        }
 
-
-
-    # 📈 5. Summerad statistik för alla typer
-    total_rr         = round(sum(rr_list), 2) if rr_list else 0
-    avg_rr           = round(total_rr / total_trades, 2) if total_trades else 0
-    winrate          = round((wins / total_trades) * 100, 1) if total_trades else 0
-
-    # 📈 5. Summerad statistik för logisk
-    total_rr_logisk = round(sum(rr_logisk_list_total), 2)
-    avg_rr_logisk = round(total_rr_logisk / count_logisk_total, 2) if count_logisk_total else 0
-    winrate_logisk = round((wins_logisk_total / count_logisk_total) * 100, 1) if count_logisk_total else 0
-
-    max_wins_row_logisk = max((sum(1 for _ in g) for k, g in groupby(outcome_seq_logisk_total) if k == "W"), default=0)
-    max_losses_row_logisk = max((sum(1 for _ in g) for k, g in groupby(outcome_seq_logisk_total) if k == "L"), default=0)
-
-
-    total_rr_max     = round(sum(rr_max_list_total), 2) 
-    avg_rr_max = round(total_rr_max / len(rr_max_list_total), 2) if rr_max_list_total else 0
-    winrate_max = round((wins_max_total / len(rr_max_list_total)) * 100, 1) if rr_max_list_total else 0
-
-    print("Fast Exit DEBUG")
-    print("rr_max_list:", rr_max_list)
-    print("TP:", wins_max)
-    print("SL:", losses_max)
-    print("Trades:", count_max_trades)
-    print("Longs won:", longs_won_max)
-    print("Shorts won:", shorts_won_max)
-
-
-    # 📊 6. Sekvensanalys (för max W/L i rad)
-    max_wins_row = max((sum(1 for _ in g) for k, g in groupby(outcome_sequence) if k == "W"), default=0)
-    max_losses_row = max((sum(1 for _ in g) for k, g in groupby(outcome_sequence) if k == "L"), default=0)
-
-    # 🔁 Sekvensanalys för logisk och fast exit
-    max_wins_row_logisk = max((sum(1 for _ in g) for k, g in groupby(outcome_seq_logisk_total) if k == "W"), default=0)
-    max_losses_row_logisk = max((sum(1 for _ in g) for k, g in groupby(outcome_seq_logisk_total) if k == "L"), default=0)
-
-    max_wins_row_max = max((sum(1 for _ in g) for k, g in groupby(outcome_seq_max_total) if k == "W"), default=0)
-    max_losses_row_max = max((sum(1 for _ in g) for k, g in groupby(outcome_seq_max_total) if k == "L"), default=0)
-
-    # 🧹 7. Skapa badge-struktur för aktiva filter
+    # Filter-badges
     active_filters = {}
     clear_links = {}
     for key, values in filters.items():
@@ -1227,188 +1208,34 @@ def stats_details():
             for v in non_empty:
                 updated_args = filters.copy()
                 updated_args[key] = [val for val in non_empty if val != v]
-                clear_links[f"{key}:{v}"] = url_for("stats") + "?" + urlencode(updated_args, doseq=True)
+                clear_links[f"{key}:{v}"] = url_for("stats_details") + "?" + urlencode(updated_args, doseq=True)
 
-    # 📊 Monthly stats
-    monthly_stats = {}
-    trades_by_month = defaultdict(list)
-    for t in trades:
-        try:
-            month = datetime.strptime(t["datum"], "%Y-%m-%d").strftime("%Y-%m")
-            trades_by_month[month].append(t)
-        except Exception:
-            continue
-    for month, trades_in_month in sorted(trades_by_month.items(), reverse=True):
-        rr_logisk_list = []
-        rr_max_list = []
-
-        wins_logisk = losses_logisk = wins_max = losses_max = 0
-        longs_won_logisk = shorts_won_logisk = 0
-        longs_won_max = shorts_won_max = 0
-
-        outcome_seq_logisk = []
-        outcome_seq_max = []
-
-        for t in trades_in_month:
-            # === Logisk Exit ===
-            direction = t.get("direction")
-            outcome = t.get("outcome")
-            rr_l = t.get("rr_logisk")
-
-            if isinstance(rr_l, str): rr_l = rr_l.strip()
-
-            try:
-                val = float(rr_l)
-
-                if outcome == "tp":
-                    rr_logisk_list.append(val)
-                    wins_logisk += 1
-                    outcome_seq_logisk.append("W")
-                    if direction == "long":
-                        longs_won_logisk += 1
-                    elif direction == "short":
-                        shorts_won_logisk += 1
-                elif outcome == "sl":
-                    rr_logisk_list.append(-1)
-                    losses_logisk += 1
-                    outcome_seq_logisk.append("L")
-                else:
-                    rr_logisk_list.append(0)
-                    outcome_seq_logisk.append("N")
-
-            except:
-                rr_logisk_list.append(0)
-                outcome_seq_logisk.append("N")
-
-            # === Fast Exit ===
-            rr_m = t.get("rr_max")
-            if rr_m is None or rr_m == "":
-                continue
-            if isinstance(rr_m, str): rr_m = rr_m.strip()
-            try:
-                val = float(rr_m)
-                if rr_max_filter:
-                    target = float(rr_max_filter)
-                    if val >= target:
-                        rr_max_list.append(target)
-                        wins_max += 1
-                        outcome_seq_max.append("W")
-                        if direction == "long":
-                            longs_won_max += 1
-                        elif direction == "short":
-                            shorts_won_max += 1
-                    else:
-                        rr_max_list.append(-1)
-                        losses_max += 1
-                        outcome_seq_max.append("L")
-                else:
-                    rr_max_list.append(val)
-                    if val > 0:
-                        wins_max += 1
-                        outcome_seq_max.append("W")
-                        if direction == "long":
-                            longs_won_max += 1
-                        elif direction == "short":
-                            shorts_won_max += 1
-                    elif val < 0:
-                        losses_max += 1
-                        outcome_seq_max.append("L")
-                    else:
-                        outcome_seq_max.append("N")
-            except:
-                continue
-
-        # ✅ Filtrera bort ogiltiga logiska rr
-        valid_rr_logisk = [v for v in rr_logisk_list if v != 0]
-        valid_wins_logisk = sum(1 for v in valid_rr_logisk if v > 0)
-        valid_losses_logisk = sum(1 for v in valid_rr_logisk if v < 0)
-        winrate_l = round((valid_wins_logisk / len(valid_rr_logisk)) * 100, 1) if valid_rr_logisk else 0
-        total_rr_l = round(sum(valid_rr_logisk), 2) if valid_rr_logisk else 0
-        avg_rr_l = round(total_rr_l / len(valid_rr_logisk), 2) if valid_rr_logisk else 0
-
-        # 🔁 Fast Exit kalkyl
-        def calc_stats(rr_list, wins, losses):
-            total = round(sum(rr_list), 2) if rr_list else 0
-            avg = round(total / len(rr_list), 2) if rr_list else 0
-            winrate = round((wins / len(rr_list)) * 100, 1) if rr_list else 0
-            return total, avg, wins, losses, winrate
-
-        total_rr_m, avg_rr_m, w_m, l_m, winrate_m = calc_stats(rr_max_list, wins_max, losses_max)
-
-        # 🔁 Sekvenser
-        max_wins_row_l = max((sum(1 for _ in g) for k, g in groupby(outcome_seq_logisk) if k == "W"), default=0)
-        max_losses_row_l = max((sum(1 for _ in g) for k, g in groupby(outcome_seq_logisk) if k == "L"), default=0)
-        max_wins_row_m = max((sum(1 for _ in g) for k, g in groupby(outcome_seq_max) if k == "W"), default=0)
-        max_losses_row_m = max((sum(1 for _ in g) for k, g in groupby(outcome_seq_max) if k == "L"), default=0)
-
-        monthly_stats[month] = {
-            "logisk": {
-                "total": total_rr_l,
-                "avg": avg_rr_l,
-                "wins": valid_wins_logisk,
-                "losses": valid_losses_logisk,
-                "winrate": winrate_l,
-                "longs_won": longs_won_logisk,
-                "shorts_won": shorts_won_logisk,
-                "max_wins_row": max_wins_row_l,
-                "max_losses_row": max_losses_row_l
-            },
-            "max": {
-                "total": total_rr_m,
-                "avg": avg_rr_m,
-                "wins": w_m,
-                "losses": l_m,
-                "winrate": winrate_m,
-                "longs_won": longs_won_max,
-                "shorts_won": shorts_won_max,
-                "max_wins_row": max_wins_row_m,
-                "max_losses_row": max_losses_row_m
-            },
-            "extra": {
-                "total_trades": len([
-                    t for t in trades_in_month
-                    if not (
-                        (not t.get("rr_logisk") or str(t.get("rr_logisk")).strip() == "") and
-                        (not t.get("rr_max") or str(t.get("rr_max")).strip() == "") and
-                        (not t.get("outcome") or t.get("outcome") == "none")
-                    )
-                ])
-            }
-        }
-
-    return render_template("stats_details.html", 
+    return render_template("stats_details.html",
         total_rr_logisk=total_rr_logisk,
         avg_rr_logisk=avg_rr_logisk,
         winrate_logisk=winrate_logisk,
-        wins_logisk=wins_logisk_total,
-        losses_logisk=losses_logisk_total,
+        wins_logisk=wins_logisk,
+        losses_logisk=losses_logisk,
         total_trades_logisk=count_logisk_total,
-        longs_won_logisk=longs_won_logisk_total,
-        shorts_won_logisk=shorts_won_logisk_total,
-        max_wins_row_logisk=max_wins_row_logisk,
-        max_losses_row_logisk=max_losses_row_logisk,
 
         total_rr_max=total_rr_max,
         avg_rr_max=avg_rr_max,
         winrate_max=winrate_max,
-        wins_max=wins_max_total,
-        losses_max=losses_max_total,
-        total_trades_max=count_max_trades,
-        longs_won_max=longs_won_max_total,
-        shorts_won_max=shorts_won_max_total,
-        max_wins_row_max=max_wins_row_max,
-        max_losses_row_max=max_losses_row_max,
+        wins_max=wins_max,
+        losses_max=losses_max,
+        total_trades_max=count_max_total,
 
         active_filters=active_filters,
         clear_links=clear_links,
-
         monthly_stats=monthly_stats,
 
         journals=journals,
         active_journal_id=journal_id,
         active_journal_name=active_journal_name
     )
-    
+
+
+
 
 
 @app.route("/export_trades")

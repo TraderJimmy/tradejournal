@@ -101,7 +101,7 @@
           <td class="px-4 py-2 text-right">{{ data.logisk.wins }}</td>
           <td class="px-4 py-2 text-right">{{ data.logisk.losses }}</td>
           <td class="px-4 py-2 text-right">{{ data.logisk.winrate }}%</td>
-          <td class="px-4 py-2 text-right">{{ data.extra.total_trades }}</td>
+          <td class="px-4 py-2 text-right">{{ data.get("extra", {}).get("total_trades", "-") }}</td>
           <td class="px-4 py-2 text-right">{{ data.logisk.longs_won }}</td>
           <td class="px-4 py-2 text-right">{{ data.logisk.shorts_won }}</td>
           <td class="px-4 py-2 text-right">{{ data.logisk.max_wins_row }}</td>
@@ -114,7 +114,7 @@
           <td class="px-4 py-2 text-right">{{ data.max.wins }}</td>
           <td class="px-4 py-2 text-right">{{ data.max.losses }}</td>
           <td class="px-4 py-2 text-right">{{ data.max.winrate }}%</td>
-          <td class="px-4 py-2 text-right">{{ data.extra.total_trades }}</td>
+          <td class="px-4 py-2 text-right">{{ data.get("extra", {}).get("total_trades", "-") }}</td>
           <td class="px-4 py-2 text-right">{{ data.max.longs_won }}</td>
           <td class="px-4 py-2 text-right">{{ data.max.shorts_won }}</td>
           <td class="px-4 py-2 text-right">{{ data.max.max_wins_row }}</td>

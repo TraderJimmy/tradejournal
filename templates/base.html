@@ -34,6 +34,12 @@
             📊 Detaljerad Statistik
           </a>
 
+          <a href="{{ url_for('trades_table', **request.args) }}"
+             class="block py-2 px-4 rounded hover:bg-gray-800 {% if request.endpoint == 'trades_table' %}bg-gray-800 font-semibold{% endif %}">
+            📋 Alla trades (tabell)
+          </a>
+
+
           <hr class="my-4 border-gray-700">
 
           <button id="openModalBtn"

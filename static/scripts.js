@@ -206,6 +206,14 @@ document.addEventListener('DOMContentLoaded', function () {
     });
   });
 
+  // 🔁 Klicka på rad för att redigera trade
+  document.querySelectorAll('tr[data-edit-id]').forEach(row => {
+    row.addEventListener('click', () => {
+      const tradeId = row.getAttribute('data-edit-id');
+      if (tradeId) openEditModal(tradeId);
+    });
+  });
+
   // 🔔 Auto-stäng flash-meddelande
   const flashContainer = document.getElementById("flash-messages");
   if (flashContainer) {
